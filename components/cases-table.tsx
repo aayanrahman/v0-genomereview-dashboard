@@ -2,6 +2,7 @@ import Link from 'next/link';
 import { Button } from '@/components/ui/button';
 import { PipelineProgress } from '@/components/pipeline-progress';
 import { StatusBadge } from '@/components/status-badge';
+import { LiveWorkflowIndicator } from '@/components/live-workflow-indicator';
 import type { Case } from '@/lib/types';
 import { ArrowRight, Eye } from 'lucide-react';
 
@@ -57,7 +58,12 @@ export function CasesTable({ cases }: CasesTableProps) {
                 </p>
               </td>
               <td className="px-4 py-4">
-                <PipelineProgress steps={caseItem.pipelineSteps} showDurations={false} />
+                <div className="flex items-center gap-3">
+                  <PipelineProgress steps={caseItem.pipelineSteps} showDurations={false} />
+                  {caseItem.status === 'In progress' && (
+                    <LiveWorkflowIndicator steps={caseItem.pipelineSteps} />
+                  )}
+                </div>
               </td>
               <td className="px-4 py-4">
                 <StatusBadge status={caseItem.status} />

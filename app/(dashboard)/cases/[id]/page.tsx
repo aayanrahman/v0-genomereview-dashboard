@@ -46,9 +46,14 @@ export default async function CaseDetailPage({ params }: PageProps) {
               {caseData.genePanel} Panel · {caseData.priority} Priority
             </p>
           </div>
-          <div className="text-right text-sm text-muted-foreground">
-            <p>Workflow ID</p>
-            <code className="font-mono text-xs text-foreground">{caseData.workflowId}</code>
+          <div className="flex items-center gap-2">
+            <div className="rounded-md border border-border/50 bg-secondary/50 px-2.5 py-1.5">
+              <p className="text-[10px] uppercase tracking-wider text-muted-foreground">Workflow ID</p>
+              <code className="font-mono text-xs text-foreground">{caseData.workflowId}</code>
+            </div>
+            <div className="rounded-full border border-benign/30 bg-benign/10 px-2 py-0.5">
+              <span className="text-[10px] font-semibold uppercase tracking-wider text-benign">Durable</span>
+            </div>
           </div>
         </div>
 
@@ -113,6 +118,7 @@ export default async function CaseDetailPage({ params }: PageProps) {
               steps={caseData.pipelineSteps} 
               variant="vertical" 
               showDurations={true}
+              showStepOutputs={true}
             />
           </Card>
         </aside>

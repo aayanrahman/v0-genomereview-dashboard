@@ -85,13 +85,26 @@ export function NewCaseForm() {
     await new Promise(resolve => setTimeout(resolve, 2000));
     
     const workflowId = `wf_${Math.random().toString(36).substring(2, 10)}`;
+    const caseId = `case-${Date.now()}`;
     
-    toast.success('Pipeline started', {
-      description: `Durable workflow ID: ${workflowId}`,
+    toast.success('Durable pipeline started', {
+      description: (
+        <div className="flex flex-col gap-1">
+          <span className="font-mono text-xs">ID: {workflowId}</span>
+          <a 
+            href={`/cases/case-005`}
+            className="text-xs text-accent hover:underline"
+          >
+            View live pipeline →
+          </a>
+        </div>
+      ),
+      duration: 8000,
     });
     
     setIsSubmitting(false);
-    router.push('/');
+    // Navigate to the case detail page to see live pipeline
+    router.push('/cases/case-005');
   };
 
   const isValid = 

@@ -1,10 +1,17 @@
+'use client';
+
+import { useState } from 'react';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Switch } from '@/components/ui/switch';
+import { DemoModeCrashSimulation } from '@/components/demo-mode-crash-simulation';
+import { toast } from 'sonner';
 
 export default function SettingsPage() {
+  const [demoMode, setDemoMode] = useState(false);
+
   return (
     <div className="p-8">
       <header className="mb-8">
@@ -31,6 +38,39 @@ export default function SettingsPage() {
               <Input id="role" defaultValue="Clinical Geneticist" className="mt-2" disabled />
             </div>
           </div>
+        </Card>
+
+        <Card className="border-accent/30 bg-accent/5 p-6">
+          <div className="flex items-start justify-between">
+            <div>
+              <h2 className="text-lg font-semibold text-foreground flex items-center gap-2">
+                Demo Mode
+                <span className="rounded-full bg-accent px-2 py-0.5 text-[10px] font-bold uppercase text-white">
+                  WDK
+                </span>
+              </h2>
+              <p className="mt-1 text-sm text-muted-foreground">
+                Simulate pipeline crashes and demonstrate WDK&apos;s durable workflow recovery
+              </p>
+            </div>
+            <Switch 
+              checked={demoMode} 
+              onCheckedChange={(checked) => {
+                setDemoMode(checked);
+                toast(checked ? 'Demo mode enabled' : 'Demo mode disabled', {
+                  description: checked 
+                    ? 'You can now simulate crashes to show WDK durability' 
+                    : 'Normal operation resumed',
+                });
+              }} 
+            />
+          </div>
+          
+          {demoMode && (
+            <div className="mt-6 border-t border-accent/20 pt-6">
+              <DemoModeCrashSimulation />
+            </div>
+          )}
         </Card>
 
         <Card className="border-border/50 p-6">
@@ -96,7 +136,10 @@ export default function SettingsPage() {
         </Card>
 
         <div className="flex justify-end">
-          <Button className="bg-accent text-accent-foreground hover:bg-accent/90">
+          <Button 
+            className="bg-accent text-accent-foreground hover:bg-accent/90"
+            onClick={() => toast.success('Settings saved')}
+          >
             Save Changes
           </Button>
         </div>

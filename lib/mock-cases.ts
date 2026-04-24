@@ -345,12 +345,15 @@ export function getDeliveredCases(): Case[] {
 
 export function getStats() {
   const pendingReview = mockCases.filter(c => c.status === 'Awaiting review' || c.status === 'Under review').length;
-  const variantsThisWeek = mockCases.reduce((acc, c) => acc + c.variants.length, 0);
+  // Realistic VCF files contain thousands of variants per sample
+  const variantsThisWeek = '2,847';
+  const totalVariants = '1.2M';
   const avgTurnaround = '1.8 days';
   
   return {
     pendingReview,
     variantsThisWeek,
+    totalVariants,
     avgTurnaround,
   };
 }
