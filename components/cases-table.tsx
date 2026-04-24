@@ -3,11 +3,29 @@ import { Button } from '@/components/ui/button';
 import { PipelineProgress } from '@/components/pipeline-progress';
 import { StatusBadge } from '@/components/status-badge';
 import { LiveWorkflowIndicator } from '@/components/live-workflow-indicator';
-import type { Case } from '@/lib/types';
 import { ArrowRight, Eye } from 'lucide-react';
 
+interface PipelineStep {
+  name: string;
+  status: string;
+  duration?: string;
+}
+
+interface CaseItem {
+  id: string;
+  patientName: string;
+  mrn: string;
+  indication: string;
+  genePanel: string[];
+  priority: string;
+  status: string;
+  workflowId: string | null;
+  createdAt: string;
+  pipelineSteps: PipelineStep[];
+}
+
 interface CasesTableProps {
-  cases: Case[];
+  cases: CaseItem[];
 }
 
 export function CasesTable({ cases }: CasesTableProps) {
@@ -17,7 +35,7 @@ export function CasesTable({ cases }: CasesTableProps) {
         <thead>
           <tr className="border-b border-border/50 bg-muted/30">
             <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-muted-foreground">
-              Patient ID
+              Patient / MRN
             </th>
             <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-muted-foreground">
               Submitted
@@ -38,20 +56,21 @@ export function CasesTable({ cases }: CasesTableProps) {
             <tr key={caseItem.id} className="hover:bg-muted/20 transition-colors">
               <td className="px-4 py-4">
                 <div>
-                  <p className="font-mono text-sm font-medium text-foreground">
-                    {caseItem.patientId}
+                  <p className="text-sm font-medium text-foreground">
+                    {caseItem.patientName}
                   </p>
                   <p className="mt-0.5 text-xs text-muted-foreground">
-                    {caseItem.genePanel}
+                    {caseItem.mrn} · {caseItem.genePanel.slice(0, 3).join(', ')}
+                    {caseItem.genePanel.length > 3 && ` +${caseItem.genePanel.length - 3}`}
                   </p>
                 </div>
               </td>
               <td className="px-4 py-4">
                 <p className="text-sm text-foreground">
-                  {new Date(caseItem.submittedAt).toLocaleDateString()}
+                  {new Date(caseItem.createdAt).toLocaleDateString()}
                 </p>
                 <p className="mt-0.5 text-xs text-muted-foreground">
-                  {new Date(caseItem.submittedAt).toLocaleTimeString([], { 
+                  {new Date(caseItem.createdAt).toLocaleTimeString([], { 
                     hour: '2-digit', 
                     minute: '2-digit' 
                   })}
@@ -59,9 +78,15 @@ export function CasesTable({ cases }: CasesTableProps) {
               </td>
               <td className="px-4 py-4">
                 <div className="flex items-center gap-3">
-                  <PipelineProgress steps={caseItem.pipelineSteps} showDurations={false} />
-                  {caseItem.status === 'In progress' && (
-                    <LiveWorkflowIndicator steps={caseItem.pipelineSteps} />
+                  {caseItem.pipelineSteps.length > 0 ? (
+                    <>
+                      <PipelineProgress steps={caseItem.pipelineSteps} showDurations={false} />
+                      {caseItem.status === 'In progress' && (
+                        <LiveWorkflowIndicator steps={caseItem.pipelineSteps} />
+                      )}
+                    </>
+                  ) : (
+                    <span className="text-xs text-muted-foreground">Pending</span>
                   )}
                 </div>
               </td>
@@ -71,7 +96,7 @@ export function CasesTable({ cases }: CasesTableProps) {
               <td className="px-4 py-4 text-right">
                 <Button asChild size="sm" variant="ghost" className="gap-1.5">
                   <Link href={`/cases/${caseItem.id}`}>
-                    {caseItem.status === 'Delivered' ? (
+                    {caseItem.status === 'Completed' ? (
                       <>
                         <Eye className="h-3.5 w-3.5" />
                         View

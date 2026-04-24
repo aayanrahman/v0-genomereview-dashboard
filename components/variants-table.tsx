@@ -2,9 +2,29 @@
 
 import { useState } from 'react';
 import { VariantClassificationBadge } from '@/components/variant-classification-badge';
-import type { Variant } from '@/lib/types';
 import { ChevronDown, ChevronRight } from 'lucide-react';
 import { cn } from '@/lib/utils';
+
+interface Variant {
+  id: string;
+  gene: string;
+  hgvsC: string;
+  hgvsP: string | null;
+  chromosome: string;
+  position: number;
+  refAllele: string;
+  altAllele: string;
+  zygosity: string;
+  classification: string;
+  gnomadAf: number | null;
+  clinvarId: string | null;
+  clinvarSignificance: string | null;
+  acmgCriteria: string[];
+  aiReasoning: string;
+  aiConfidence: number;
+  reviewed: boolean;
+  reviewerNotes: string | null;
+}
 
 interface VariantsTableProps {
   variants: Variant[];
@@ -34,10 +54,10 @@ export function VariantsTable({ variants }: VariantsTableProps) {
               Gene
             </th>
             <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-muted-foreground">
-              Consequence
+              HGVS
             </th>
             <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-muted-foreground">
-              AlphaGenome
+              Zygosity
             </th>
             <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-muted-foreground">
               ClinVar
@@ -73,37 +93,35 @@ export function VariantsTable({ variants }: VariantsTableProps) {
                   </td>
                   <td className="px-4 py-4">
                     <code className="font-mono text-sm text-foreground">
-                      {variant.coordinates}
+                      chr{variant.chromosome}:{variant.position}
                     </code>
+                    <p className="text-xs text-muted-foreground">
+                      {variant.refAllele} &gt; {variant.altAllele}
+                    </p>
                   </td>
                   <td className="px-4 py-4">
                     <span className="font-medium text-foreground">{variant.gene}</span>
-                    <p className="text-xs text-muted-foreground">{variant.transcript}</p>
+                  </td>
+                  <td className="px-4 py-4 text-sm">
+                    <code className="font-mono text-xs text-foreground">{variant.hgvsC}</code>
+                    {variant.hgvsP && (
+                      <p className="text-xs text-muted-foreground mt-0.5">{variant.hgvsP}</p>
+                    )}
+                  </td>
+                  <td className="px-4 py-4 text-sm text-foreground capitalize">
+                    {variant.zygosity}
                   </td>
                   <td className="px-4 py-4 text-sm text-foreground">
-                    {variant.consequence}
-                  </td>
-                  <td className="px-4 py-4">
-                    <span className={cn(
-                      'font-mono text-sm font-medium',
-                      variant.alphaGenomeScore >= 0.9 && 'text-pathogenic',
-                      variant.alphaGenomeScore >= 0.7 && variant.alphaGenomeScore < 0.9 && 'text-vus',
-                      variant.alphaGenomeScore < 0.7 && 'text-muted-foreground'
-                    )}>
-                      {variant.alphaGenomeScore.toFixed(2)}
-                    </span>
-                  </td>
-                  <td className="px-4 py-4 text-sm text-foreground">
-                    {variant.clinvarClassification}
+                    {variant.clinvarSignificance || '-'}
                   </td>
                   <td className="px-4 py-4">
                     <code className="font-mono text-xs text-muted-foreground">
-                      {variant.gnomadFrequency}
+                      {variant.gnomadAf ? variant.gnomadAf.toExponential(2) : 'Not found'}
                     </code>
                   </td>
                   <td className="px-4 py-4">
                     <VariantClassificationBadge 
-                      classification={variant.claudeClassification} 
+                      classification={variant.classification} 
                       size="sm"
                     />
                   </td>
@@ -113,28 +131,50 @@ export function VariantsTable({ variants }: VariantsTableProps) {
                     <td colSpan={8} className="px-6 py-4">
                       <div className="space-y-4">
                         <div>
-                          <h4 className="mb-2 text-sm font-semibold text-foreground">
-                            Evidence Reasoning
+                          <h4 className="mb-2 text-sm font-semibold text-foreground flex items-center gap-2">
+                            AI Reasoning
+                            <span className="text-xs font-normal text-muted-foreground">
+                              (Confidence: {(variant.aiConfidence * 100).toFixed(0)}%)
+                            </span>
                           </h4>
                           <p className="text-sm leading-relaxed text-muted-foreground">
-                            {variant.evidenceReasoning}
+                            {variant.aiReasoning || 'No reasoning available.'}
                           </p>
                         </div>
                         <div>
                           <h4 className="mb-2 text-sm font-semibold text-foreground">
-                            ACMG Criteria
+                            ACMG Criteria Applied
                           </h4>
                           <div className="flex flex-wrap gap-2">
-                            {variant.acmgCriteria.map((criterion) => (
-                              <span
-                                key={criterion}
-                                className="rounded-md bg-secondary px-2 py-1 font-mono text-xs text-foreground"
-                              >
-                                {criterion}
-                              </span>
-                            ))}
+                            {variant.acmgCriteria.length > 0 ? (
+                              variant.acmgCriteria.map((criterion) => (
+                                <span
+                                  key={criterion}
+                                  className={cn(
+                                    'rounded-md px-2 py-1 font-mono text-xs',
+                                    criterion.startsWith('P') && 'bg-pathogenic/10 text-pathogenic',
+                                    criterion.startsWith('B') && 'bg-benign/10 text-benign',
+                                    !criterion.startsWith('P') && !criterion.startsWith('B') && 'bg-secondary text-foreground'
+                                  )}
+                                >
+                                  {criterion}
+                                </span>
+                              ))
+                            ) : (
+                              <span className="text-xs text-muted-foreground">No criteria assigned</span>
+                            )}
                           </div>
                         </div>
+                        {variant.reviewerNotes && (
+                          <div>
+                            <h4 className="mb-2 text-sm font-semibold text-foreground">
+                              Reviewer Notes
+                            </h4>
+                            <p className="text-sm leading-relaxed text-muted-foreground">
+                              {variant.reviewerNotes}
+                            </p>
+                          </div>
+                        )}
                       </div>
                     </td>
                   </tr>

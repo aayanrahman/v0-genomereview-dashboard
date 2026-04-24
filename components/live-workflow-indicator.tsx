@@ -1,8 +1,13 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import type { PipelineStep } from '@/lib/types';
-import { PIPELINE_STAGES } from '@/lib/types';
+
+interface PipelineStep {
+  name: string;
+  status: string;
+  duration?: string;
+  startedAt?: string;
+}
 
 interface LiveWorkflowIndicatorProps {
   steps: PipelineStep[];
@@ -11,10 +16,7 @@ interface LiveWorkflowIndicatorProps {
 export function LiveWorkflowIndicator({ steps }: LiveWorkflowIndicatorProps) {
   const [elapsed, setElapsed] = useState(0);
 
-  const activeStep = steps.find(s => s.status === 'active');
-  const activeStageInfo = activeStep 
-    ? PIPELINE_STAGES.find(s => s.stage === activeStep.stage) 
-    : null;
+  const activeStep = steps.find(s => s.status === 'running');
 
   useEffect(() => {
     if (!activeStep?.startedAt) return;
@@ -31,7 +33,7 @@ export function LiveWorkflowIndicator({ steps }: LiveWorkflowIndicatorProps) {
     return () => clearInterval(interval);
   }, [activeStep?.startedAt]);
 
-  if (!activeStageInfo) return null;
+  if (!activeStep) return null;
 
   const minutes = Math.floor(elapsed / 60);
   const seconds = elapsed % 60;
@@ -43,7 +45,7 @@ export function LiveWorkflowIndicator({ steps }: LiveWorkflowIndicatorProps) {
         <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-accent opacity-75" />
         <span className="relative inline-flex h-2 w-2 rounded-full bg-accent" />
       </span>
-      <span className="font-medium text-accent">{activeStageInfo.label}</span>
+      <span className="font-medium text-accent">{activeStep.name}</span>
       <span className="text-muted-foreground">·</span>
       <span className="font-mono text-muted-foreground">{timeString}</span>
     </div>

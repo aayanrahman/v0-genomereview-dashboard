@@ -1,30 +1,148 @@
 import { notFound } from 'next/navigation';
 import Link from 'next/link';
-import { getCaseById } from '@/lib/mock-cases';
+import { createClient } from '@/lib/supabase/server';
 import { Card } from '@/components/ui/card';
 import { PipelineProgress } from '@/components/pipeline-progress';
 import { StatusBadge } from '@/components/status-badge';
 import { CaseReviewPanel } from '@/components/case-review-panel';
 import { CaseActions } from '@/components/case-actions';
 import { ArrowLeft, User, Calendar, Stethoscope, FileText } from 'lucide-react';
+import { CasePolling } from '@/components/case-polling';
 
 interface PageProps {
   params: Promise<{ id: string }>;
 }
 
+async function getCaseData(id: string) {
+  const supabase = await createClient();
+  
+  // Fetch case with all related data
+  const { data: caseData, error: caseError } = await supabase
+    .from('cases')
+    .select('*')
+    .eq('id', id)
+    .single();
+  
+  if (caseError || !caseData) {
+    return null;
+  }
+  
+  // Fetch variants
+  const { data: variants } = await supabase
+    .from('variants')
+    .select('*')
+    .eq('case_id', id)
+    .order('classification', { ascending: true });
+  
+  // Fetch pipeline steps
+  const { data: pipelineSteps } = await supabase
+    .from('pipeline_steps')
+    .select('*')
+    .eq('case_id', id)
+    .order('step_order', { ascending: true });
+  
+  // Fetch AI summary
+  const { data: aiSummary } = await supabase
+    .from('ai_summaries')
+    .select('*')
+    .eq('case_id', id)
+    .order('generated_at', { ascending: false })
+    .limit(1)
+    .single();
+  
+  return {
+    id: caseData.id,
+    patientName: caseData.patient_name,
+    patientDob: caseData.patient_dob,
+    mrn: caseData.mrn,
+    orderingPhysician: caseData.ordering_physician,
+    indication: caseData.indication,
+    genePanel: caseData.gene_panel.join(', '),
+    genePanelArray: caseData.gene_panel,
+    priority: caseData.priority.charAt(0).toUpperCase() + caseData.priority.slice(1),
+    status: formatStatus(caseData.status),
+    rawStatus: caseData.status,
+    workflowId: caseData.workflow_id || 'Not assigned',
+    createdAt: caseData.created_at,
+    updatedAt: caseData.updated_at,
+    variants: variants?.map(v => ({
+      id: v.id,
+      gene: v.gene,
+      hgvsC: v.hgvs_c,
+      hgvsP: v.hgvs_p,
+      chromosome: v.chromosome,
+      position: v.position,
+      refAllele: v.ref_allele,
+      altAllele: v.alt_allele,
+      zygosity: v.zygosity,
+      classification: v.classification,
+      gnomadAf: v.gnomad_af,
+      clinvarId: v.clinvar_id,
+      clinvarSignificance: v.clinvar_significance,
+      acmgCriteria: v.acmg_criteria || [],
+      aiReasoning: v.ai_reasoning,
+      aiConfidence: v.ai_confidence,
+      reviewed: v.reviewed,
+      reviewerNotes: v.reviewer_notes,
+    })) || [],
+    pipelineSteps: pipelineSteps?.map(step => ({
+      name: step.step_name,
+      status: step.status,
+      duration: step.duration_ms ? `${(step.duration_ms / 1000).toFixed(1)}s` : undefined,
+      startedAt: step.started_at,
+      completedAt: step.completed_at,
+      output: step.output,
+    })) || [],
+    aiSummary: aiSummary ? {
+      summary: aiSummary.summary,
+      keyFindings: aiSummary.key_findings || [],
+      recommendations: aiSummary.recommendations || [],
+      modelUsed: aiSummary.model_used,
+      generatedAt: aiSummary.generated_at,
+      reviewedBy: aiSummary.reviewed_by,
+      reviewedAt: aiSummary.reviewed_at,
+    } : null,
+  };
+}
+
+function formatStatus(status: string): string {
+  const statusMap: Record<string, string> = {
+    'pending': 'Pending',
+    'in_progress': 'In progress',
+    'awaiting_review': 'Awaiting review',
+    'under_review': 'Under review',
+    'completed': 'Completed',
+    'failed': 'Failed',
+  };
+  return statusMap[status] || status;
+}
+
+function calculateAge(dob: string): number {
+  const birthDate = new Date(dob);
+  const today = new Date();
+  let age = today.getFullYear() - birthDate.getFullYear();
+  const monthDiff = today.getMonth() - birthDate.getMonth();
+  if (monthDiff < 0 || (monthDiff === 0 && today.getDate() < birthDate.getDate())) {
+    age--;
+  }
+  return age;
+}
+
 export default async function CaseDetailPage({ params }: PageProps) {
   const { id } = await params;
-  const caseData = getCaseById(id);
+  const caseData = await getCaseData(id);
 
   if (!caseData) {
     notFound();
   }
 
-  // TODO: Fetch case data from WDK workflow endpoint
-  // const caseData = await fetch(`/api/workflows/${id}`).then(r => r.json())
+  const isInProgress = caseData.rawStatus === 'in_progress' || caseData.rawStatus === 'pending';
 
   return (
     <div className="pb-24">
+      {/* Polling component for live updates when pipeline is running */}
+      {isInProgress && <CasePolling caseId={id} />}
+      
       <header className="border-b border-border/50 bg-card px-8 py-6">
         <Link 
           href="/" 
@@ -38,12 +156,21 @@ export default async function CaseDetailPage({ params }: PageProps) {
           <div>
             <div className="flex items-center gap-3">
               <h1 className="text-2xl font-semibold text-foreground">
-                Case {caseData.patientId}
+                {caseData.patientName}
               </h1>
               <StatusBadge status={caseData.status} />
+              {isInProgress && (
+                <span className="flex items-center gap-1.5 text-xs text-muted-foreground">
+                  <span className="relative flex h-2 w-2">
+                    <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-accent opacity-75"></span>
+                    <span className="relative inline-flex rounded-full h-2 w-2 bg-accent"></span>
+                  </span>
+                  Pipeline running
+                </span>
+              )}
             </div>
             <p className="mt-1 text-muted-foreground">
-              {caseData.genePanel} Panel · {caseData.priority} Priority
+              {caseData.genePanel} · {caseData.priority} Priority · MRN: {caseData.mrn}
             </p>
           </div>
           <div className="flex items-center gap-2">
@@ -65,7 +192,7 @@ export default async function CaseDetailPage({ params }: PageProps) {
             <div>
               <p className="text-xs text-muted-foreground">Patient</p>
               <p className="text-sm font-medium text-foreground">
-                {caseData.age}yo {caseData.sex}
+                {calculateAge(caseData.patientDob)} years old
               </p>
             </div>
           </div>
@@ -74,9 +201,9 @@ export default async function CaseDetailPage({ params }: PageProps) {
               <Calendar className="h-4 w-4 text-muted-foreground" />
             </div>
             <div>
-              <p className="text-xs text-muted-foreground">Sample Date</p>
+              <p className="text-xs text-muted-foreground">Date of Birth</p>
               <p className="text-sm font-medium text-foreground">
-                {new Date(caseData.sampleDate).toLocaleDateString()}
+                {new Date(caseData.patientDob).toLocaleDateString()}
               </p>
             </div>
           </div>
@@ -85,9 +212,9 @@ export default async function CaseDetailPage({ params }: PageProps) {
               <Stethoscope className="h-4 w-4 text-muted-foreground" />
             </div>
             <div>
-              <p className="text-xs text-muted-foreground">Referring Clinician</p>
+              <p className="text-xs text-muted-foreground">Ordering Physician</p>
               <p className="text-sm font-medium text-foreground">
-                {caseData.referringClinician}
+                {caseData.orderingPhysician}
               </p>
             </div>
           </div>
@@ -98,7 +225,7 @@ export default async function CaseDetailPage({ params }: PageProps) {
             <div>
               <p className="text-xs text-muted-foreground">Submitted</p>
               <p className="text-sm font-medium text-foreground">
-                {new Date(caseData.submittedAt).toLocaleDateString()}
+                {new Date(caseData.createdAt).toLocaleDateString()}
               </p>
             </div>
           </div>

@@ -19,13 +19,14 @@ export function NewCaseForm() {
   const [dragActive, setDragActive] = useState(false);
   
   const [formData, setFormData] = useState({
-    patientId: '',
-    age: '',
-    sex: 'Female' as 'Male' | 'Female' | 'Other',
+    patientName: '',
+    patientDob: '',
+    mrn: '',
+    orderingPhysician: '',
     indication: '',
     genePanels: [] as string[],
     vcfFile: null as File | null,
-    priority: 'Routine' as 'Routine' | 'Urgent' | 'Stat',
+    priority: 'routine' as 'routine' | 'urgent' | 'stat',
   });
 
   const handleDrag = useCallback((e: React.DragEvent) => {
@@ -74,89 +75,122 @@ export function NewCaseForm() {
     e.preventDefault();
     setIsSubmitting(true);
 
-    // TODO: Call WDK workflow endpoint to start analysis
-    // const response = await fetch('/api/workflows/start', {
-    //   method: 'POST',
-    //   body: formData
-    // });
-    // const { workflowId } = await response.json();
+    try {
+      // Get selected genes from panels
+      const selectedGenes = formData.genePanels.flatMap(panelId => {
+        const panel = GENE_PANELS.find(p => p.id === panelId);
+        return panel?.genes || [];
+      });
 
-    // Simulate API call
-    await new Promise(resolve => setTimeout(resolve, 2000));
-    
-    const workflowId = `wf_${Math.random().toString(36).substring(2, 10)}`;
-    const caseId = `case-${Date.now()}`;
-    
-    toast.success('Durable pipeline started', {
-      description: (
-        <div className="flex flex-col gap-1">
-          <span className="font-mono text-xs">ID: {workflowId}</span>
-          <a 
-            href={`/cases/case-005`}
-            className="text-xs text-accent hover:underline"
-          >
-            View live pipeline →
-          </a>
-        </div>
-      ),
-      duration: 8000,
-    });
-    
-    setIsSubmitting(false);
-    // Navigate to the case detail page to see live pipeline
-    router.push('/cases/case-005');
+      // Read VCF file content if present
+      let vcfData: string | undefined;
+      if (formData.vcfFile) {
+        vcfData = await formData.vcfFile.text();
+      }
+
+      // Call the real WDK workflow endpoint
+      const response = await fetch('/api/workflows/start', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          patientName: formData.patientName,
+          patientDob: formData.patientDob,
+          mrn: formData.mrn,
+          orderingPhysician: formData.orderingPhysician,
+          indication: formData.indication,
+          genePanel: [...new Set(selectedGenes)], // Deduplicate genes
+          priority: formData.priority,
+          vcfData,
+        }),
+      });
+
+      const result = await response.json();
+
+      if (!response.ok) {
+        throw new Error(result.error || 'Failed to start workflow');
+      }
+
+      toast.success('Durable pipeline started', {
+        description: (
+          <div className="flex flex-col gap-1">
+            <span className="font-mono text-xs">Workflow ID: {result.workflowId}</span>
+            <span className="text-xs text-muted-foreground">
+              Case ID: {result.caseId}
+            </span>
+          </div>
+        ),
+        duration: 8000,
+      });
+      
+      // Navigate to the case detail page to see live pipeline
+      router.push(`/cases/${result.caseId}`);
+      
+    } catch (error) {
+      console.error('Workflow start error:', error);
+      toast.error('Failed to start analysis', {
+        description: error instanceof Error ? error.message : 'Please try again',
+      });
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   const isValid = 
-    formData.patientId && 
-    formData.age && 
+    formData.patientName && 
+    formData.patientDob && 
+    formData.mrn &&
+    formData.orderingPhysician &&
     formData.indication && 
-    formData.genePanels.length > 0 && 
-    formData.vcfFile;
+    formData.genePanels.length > 0;
 
   return (
     <form onSubmit={handleSubmit} className="space-y-8">
       <Card className="border-border/50 p-6">
         <h2 className="mb-6 text-lg font-semibold text-foreground">Patient Information</h2>
         
-        <div className="grid gap-6 md:grid-cols-3">
+        <div className="grid gap-6 md:grid-cols-2">
           <div>
-            <Label htmlFor="patientId">Patient ID</Label>
+            <Label htmlFor="patientName">Patient Name</Label>
             <Input
-              id="patientId"
-              placeholder="PT-2024-XXXXX"
-              value={formData.patientId}
-              onChange={(e) => setFormData(prev => ({ ...prev, patientId: e.target.value }))}
+              id="patientName"
+              placeholder="Full name"
+              value={formData.patientName}
+              onChange={(e) => setFormData(prev => ({ ...prev, patientName: e.target.value }))}
               className="mt-2"
             />
           </div>
           
           <div>
-            <Label htmlFor="age">Age</Label>
+            <Label htmlFor="patientDob">Date of Birth</Label>
             <Input
-              id="age"
-              type="number"
-              placeholder="Age in years"
-              value={formData.age}
-              onChange={(e) => setFormData(prev => ({ ...prev, age: e.target.value }))}
+              id="patientDob"
+              type="date"
+              value={formData.patientDob}
+              onChange={(e) => setFormData(prev => ({ ...prev, patientDob: e.target.value }))}
               className="mt-2"
             />
           </div>
           
           <div>
-            <Label>Biological Sex</Label>
-            <RadioGroup
-              value={formData.sex}
-              onValueChange={(value) => setFormData(prev => ({ ...prev, sex: value as typeof formData.sex }))}
-              className="mt-2 flex gap-4"
-            >
-              {['Female', 'Male', 'Other'].map((sex) => (
-                <div key={sex} className="flex items-center gap-2">
-                  <RadioGroupItem value={sex} id={sex} />
-                  <Label htmlFor={sex} className="font-normal cursor-pointer">{sex}</Label>
-                </div>
-              ))}
-            </RadioGroup>
+            <Label htmlFor="mrn">Medical Record Number (MRN)</Label>
+            <Input
+              id="mrn"
+              placeholder="MRN-XXXXXXX"
+              value={formData.mrn}
+              onChange={(e) => setFormData(prev => ({ ...prev, mrn: e.target.value }))}
+              className="mt-2"
+            />
+          </div>
+
+          <div>
+            <Label htmlFor="orderingPhysician">Ordering Physician</Label>
+            <Input
+              id="orderingPhysician"
+              placeholder="Dr. Name"
+              value={formData.orderingPhysician}
+              onChange={(e) => setFormData(prev => ({ ...prev, orderingPhysician: e.target.value }))}
+              className="mt-2"
+            />
           </div>
         </div>
 
@@ -213,7 +247,10 @@ export function NewCaseForm() {
       </Card>
 
       <Card className="border-border/50 p-6">
-        <h2 className="mb-6 text-lg font-semibold text-foreground">VCF File Upload</h2>
+        <h2 className="mb-6 text-lg font-semibold text-foreground">VCF File Upload (Optional)</h2>
+        <p className="mb-4 text-sm text-muted-foreground">
+          Upload a VCF file for analysis. If not provided, demo variants will be generated based on selected gene panels.
+        </p>
         
         <div
           onDragEnter={handleDrag}
@@ -271,9 +308,9 @@ export function NewCaseForm() {
           className="flex gap-4"
         >
           {[
-            { value: 'Routine', description: 'Standard turnaround (2-3 days)' },
-            { value: 'Urgent', description: 'Expedited processing (24 hours)' },
-            { value: 'Stat', description: 'Immediate priority (6-8 hours)' },
+            { value: 'routine', label: 'Routine', description: 'Standard turnaround (2-3 days)' },
+            { value: 'urgent', label: 'Urgent', description: 'Expedited processing (24 hours)' },
+            { value: 'stat', label: 'Stat', description: 'Immediate priority (6-8 hours)' },
           ].map((option) => (
             <label
               key={option.value}
@@ -286,7 +323,7 @@ export function NewCaseForm() {
             >
               <RadioGroupItem value={option.value} className="mt-0.5" />
               <div>
-                <p className="font-medium text-foreground">{option.value}</p>
+                <p className="font-medium text-foreground">{option.label}</p>
                 <p className="text-xs text-muted-foreground">{option.description}</p>
               </div>
             </label>
@@ -306,7 +343,7 @@ export function NewCaseForm() {
           {isSubmitting ? (
             <>
               <Loader2 className="h-4 w-4 animate-spin" />
-              Starting Analysis...
+              Starting Pipeline...
             </>
           ) : (
             'Start Analysis'
