@@ -1,0 +1,23 @@
+##fileformat=VCFv4.2
+##fileDate=20260425
+##source=GenomeReview_Demo
+##reference=GRCh38
+##contig=<ID=chr3,length=198295559>
+##contig=<ID=chr2,length=242193529>
+##contig=<ID=chr7,length=159345973>
+##contig=<ID=chr17,length=83257441>
+##FILTER=<ID=PASS,Description="All filters passed">
+##INFO=<ID=DP,Number=1,Type=Integer,Description="Total read depth">
+##INFO=<ID=AF,Number=A,Type=Float,Description="Allele frequency">
+##FORMAT=<ID=GT,Number=1,Type=String,Description="Genotype">
+##FORMAT=<ID=DP,Number=1,Type=Integer,Description="Read depth">
+##FORMAT=<ID=AD,Number=R,Type=Integer,Description="Allelic depths">
+##FORMAT=<ID=GQ,Number=1,Type=Integer,Description="Genotype quality">
+#CHROM	POS	ID	REF	ALT	QUAL	FILTER	INFO	FORMAT	DEMO-LYNCH-001
+chr3	37053568	rs63750942	C	T	900	PASS	DP=152;AF=0.50	GT:DP:AD:GQ	0/1:152:76,76:99
+chr2	47702543	rs63750929	G	T	840	PASS	DP=138;AF=0.49	GT:DP:AD:GQ	0/1:138:70,68:99
+chr2	47630393	rs267607931	A	AT	780	PASS	DP=128;AF=0.48	GT:DP:AD:GQ	0/1:128:66,62:99
+chr2	47776385	rs63750526	G	A	620	PASS	DP=102;AF=0.45	GT:DP:AD:GQ	0/1:102:56,46:98
+chr7	117548628	rs397508526	G	A	490	PASS	DP=84;AF=0.42	GT:DP:AD:GQ	0/1:84:49,35:95
+chr2	47693720	rs267607935	C	G	380	PASS	DP=68;AF=0.38	GT:DP:AD:GQ	0/1:68:42,26:91
+chr17	7675088	rs28934578	C	T	290	PASS	DP=60;AF=0.34	GT:DP:AD:GQ	0/1:60:40,20:86

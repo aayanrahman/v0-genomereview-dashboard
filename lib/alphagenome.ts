@@ -1,21 +1,9 @@
 /**
  * AlphaGenome API Client
- * 
- * AlphaGenome by Google DeepMind is a multimodal model for deciphering 
- * regulatory code within DNA sequences. It provides predictions for:
- * - Gene expression
- * - Splicing patterns  
- * - Chromatin features
- * - Contact maps
- * 
- * The model achieves state-of-the-art performance on variant effect prediction tasks.
- * 
- * For the hackathon demo, this client simulates AlphaGenome's predictions
- * using biologically realistic heuristics based on variant type and position.
- * 
- * In production, this would call the actual gRPC API via:
- * - Python microservice with alphagenome package
- * - Or HTTP proxy to the AlphaGenome API
+ *
+ * Calls the Railway FastAPI proxy (alphagenome-service/) when
+ * ALPHAGENOME_SERVICE_URL + ALPHAGENOME_SERVICE_KEY are set.
+ * Falls back to biologically-informed simulation otherwise.
  */
 
 export interface AlphaGenomePrediction {
@@ -65,19 +53,55 @@ export interface VariantInput {
   hgvsP: string | null
 }
 
-/**
- * Predict variant effects using AlphaGenome
- * 
- * This function simulates AlphaGenome's multimodal predictions
- * using biologically informed heuristics for the hackathon demo.
- */
 export async function predictVariantEffect(
   variant: VariantInput,
   apiKey: string
 ): Promise<AlphaGenomePrediction> {
   const startTime = Date.now()
-  
-  // Simulate API latency (AlphaGenome typically takes 2-5 seconds per variant)
+
+  const serviceUrl = process.env.ALPHAGENOME_SERVICE_URL
+  const serviceKey = process.env.ALPHAGENOME_SERVICE_KEY
+
+  if (serviceUrl) {
+    try {
+      const res = await fetch(`${serviceUrl}/predict`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'x-api-key': serviceKey ?? '',
+        },
+        body: JSON.stringify({
+          chromosome: variant.chromosome,
+          position: variant.position,
+          reference_allele: variant.referenceAllele,
+          alternate_allele: variant.alternateAllele,
+          gene: variant.gene,
+          hgvs_c: variant.hgvsC,
+          hgvs_p: variant.hgvsP,
+        }),
+        signal: AbortSignal.timeout(30_000),
+      })
+
+      if (res.ok) {
+        const d = await res.json()
+        return {
+          variantEffectScore: d.variant_effect_score,
+          predictedEffect: d.predicted_effect,
+          rnaSeqEffect: d.rna_seq_effect,
+          spliceEffect: { score: d.splice_effect_score, type: d.splice_effect_type },
+          chromatinEffect: d.chromatin_effect,
+          confidence: d.confidence,
+          modelVersion: d.model_version,
+          predictionTime: d.prediction_time_ms,
+          source: d.source,
+        }
+      }
+    } catch (err) {
+      console.warn('AlphaGenome proxy unreachable, falling back to simulation:', err)
+    }
+  }
+
+  // Simulation fallback
   await new Promise(resolve => setTimeout(resolve, 1500 + Math.random() * 1500))
   
   // Determine variant type and calculate scores

@@ -1,0 +1,24 @@
+##fileformat=VCFv4.2
+##fileDate=20240119
+##source=GenomeReview_TestCase
+##reference=GRCh38
+##contig=<ID=chr13,length=114364328>
+##contig=<ID=chr17,length=83257441>
+##contig=<ID=chr10,length=133797422>
+##contig=<ID=chr16,length=90338345>
+##FILTER=<ID=PASS,Description="All filters passed">
+##INFO=<ID=DP,Number=1,Type=Integer,Description="Total read depth">
+##INFO=<ID=AF,Number=A,Type=Float,Description="Allele frequency">
+##FORMAT=<ID=GT,Number=1,Type=String,Description="Genotype">
+##FORMAT=<ID=DP,Number=1,Type=Integer,Description="Read depth">
+##FORMAT=<ID=AD,Number=R,Type=Integer,Description="Allelic depths">
+##FORMAT=<ID=GQ,Number=1,Type=Integer,Description="Genotype quality">
+#CHROM	POS	ID	REF	ALT	QUAL	FILTER	INFO	FORMAT	PT-2024-00301
+chr13	32340300	rs80359550	A	G	850	PASS	DP=142;AF=0.49	GT:DP:AD:GQ	0/1:142:73,69:99
+chr17	43092919	rs28897696	C	T	920	PASS	DP=156;AF=0.51	GT:DP:AD:GQ	0/1:156:77,79:99
+chr17	43063930	rs80357382	G	A	780	PASS	DP=128;AF=0.48	GT:DP:AD:GQ	0/1:128:66,62:99
+chr17	7674220	rs28934578	C	T	610	PASS	DP=98;AF=0.47	GT:DP:AD:GQ	0/1:98:52,46:99
+chr10	89692905	rs121909218	G	A	540	PASS	DP=87;AF=0.44	GT:DP:AD:GQ	0/1:87:49,38:99
+chr16	68771217	.	C	T	420	PASS	DP=74;AF=0.41	GT:DP:AD:GQ	0/1:74:44,30:95
+chr13	32362470	rs80359648	T	C	380	PASS	DP=68;AF=0.38	GT:DP:AD:GQ	0/1:68:42,26:91
+chr17	43045755	.	G	T	290	PASS	DP=61;AF=0.36	GT:DP:AD:GQ	0/1:61:39,22:87

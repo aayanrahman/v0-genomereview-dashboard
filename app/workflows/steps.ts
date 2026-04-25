@@ -52,6 +52,64 @@ const KNOWN_PATHOGENIC_HOTSPOTS: Record<string, { clinvar_stars: number, classif
 // Genes where homozygous pathogenic variants are embryonically lethal
 const EMBRYONIC_LETHAL_GENES = ['BRCA1', 'BRCA2', 'PALB2', 'ATM', 'CHEK2', 'RAD51C', 'RAD51D', 'BARD1']
 
+// Position-based lookup for VCF variant matching
+// Maps "chrom:pos" → gene + HGVS annotation
+const POSITION_TO_VARIANT: Record<string, { gene: string; hgvs_c: string; hgvs_p: string | null; gnomad_af: number | null }> = {
+  // BRCA1 (chr17)
+  'chr17:43057051': { gene: 'BRCA1', hgvs_c: 'c.5266dupC',        hgvs_p: 'p.Gln1756Profs*74',  gnomad_af: 0.000012 },
+  'chr17:43124027': { gene: 'BRCA1', hgvs_c: 'c.68_69delAG',       hgvs_p: 'p.Glu23Valfs*17',    gnomad_af: 0.000008 },
+  'chr17:43063368': { gene: 'BRCA1', hgvs_c: 'c.5123C>A',          hgvs_p: 'p.Ala1708Glu',       gnomad_af: 0.000003 },
+  'chr17:43063930': { gene: 'BRCA1', hgvs_c: 'c.4689C>T',          hgvs_p: 'p.His1563=',         gnomad_af: 0.000045 },
+  'chr17:43106488': { gene: 'BRCA1', hgvs_c: 'c.3756_3759delGTCT', hgvs_p: 'p.Ser1253Argfs*10',  gnomad_af: 0.000002 },
+  'chr17:43092919': { gene: 'BRCA1', hgvs_c: 'c.3770_3771delGT',   hgvs_p: 'p.Cys1257Leufs*2',   gnomad_af: 0.000001 },
+  'chr17:43045755': { gene: 'BRCA1', hgvs_c: 'c.5266dupC',         hgvs_p: 'p.Gln1756Profs*74',  gnomad_af: 0.000012 },
+  // BRCA2 (chr13)
+  'chr13:32914438': { gene: 'BRCA2', hgvs_c: 'c.5946delT',         hgvs_p: 'p.Ser1982Argfs*22',  gnomad_af: 0.000009 },
+  'chr13:32972626': { gene: 'BRCA2', hgvs_c: 'c.9382C>T',          hgvs_p: 'p.Arg3128*',         gnomad_af: 0.000006 },
+  'chr13:32936732': { gene: 'BRCA2', hgvs_c: 'c.7007G>A',          hgvs_p: 'p.Arg2336His',       gnomad_af: 0.000021 },
+  'chr13:32340300': { gene: 'BRCA2', hgvs_c: 'c.3073A>G',          hgvs_p: 'p.Ile1025Val',       gnomad_af: 0.000018 },
+  'chr13:32362470': { gene: 'BRCA2', hgvs_c: 'c.3396delA',         hgvs_p: 'p.Ser1133Argfs*15',  gnomad_af: 0.000003 },
+  // TP53 (chr17)
+  'chr17:7675088':  { gene: 'TP53',  hgvs_c: 'c.524G>A',           hgvs_p: 'p.Arg175His',        gnomad_af: null },
+  'chr17:7674220':  { gene: 'TP53',  hgvs_c: 'c.743G>A',           hgvs_p: 'p.Arg248Gln',        gnomad_af: null },
+  'chr17:7673802':  { gene: 'TP53',  hgvs_c: 'c.817C>T',           hgvs_p: 'p.Arg273Cys',        gnomad_af: null },
+  'chr17:7676594':  { gene: 'TP53',  hgvs_c: 'c.215C>G',           hgvs_p: 'p.Pro72Arg',         gnomad_af: 0.52   }, // common polymorphism
+  // MLH1 (chr3)
+  'chr3:37053568':  { gene: 'MLH1',  hgvs_c: 'c.1852_1854delAAG',  hgvs_p: 'p.Lys618del',        gnomad_af: 0.0000024 },
+  'chr3:37042323':  { gene: 'MLH1',  hgvs_c: 'c.677G>A',           hgvs_p: 'p.Arg226Gln',        gnomad_af: 0.000015 },
+  // MSH2 (chr2)
+  'chr2:47630500':  { gene: 'MSH2',  hgvs_c: 'c.942+3A>T',         hgvs_p: null,                 gnomad_af: null },
+  'chr2:47657048':  { gene: 'MSH2',  hgvs_c: 'c.1906G>C',          hgvs_p: 'p.Ala636Pro',        gnomad_af: 0.000011 },
+  'chr2:47702543':  { gene: 'MSH2',  hgvs_c: 'c.2T>C',             hgvs_p: 'p.Met1Thr',          gnomad_af: null },
+  'chr2:47630393':  { gene: 'MSH2',  hgvs_c: 'c.942+1G>A',         hgvs_p: null,                 gnomad_af: null },
+  'chr2:47776385':  { gene: 'MSH2',  hgvs_c: 'c.2635G>A',          hgvs_p: 'p.Glu879Lys',        gnomad_af: 0.000008 },
+  'chr2:47693720':  { gene: 'MSH2',  hgvs_c: 'c.2201C>G',          hgvs_p: 'p.Pro734Arg',        gnomad_af: null },
+  // PALB2 (chr16)
+  'chr16:23634316': { gene: 'PALB2', hgvs_c: 'c.3113G>A',          hgvs_p: 'p.Trp1038*',         gnomad_af: 0.000004 },
+  'chr16:23647283': { gene: 'PALB2', hgvs_c: 'c.509_510delGA',      hgvs_p: 'p.Arg170Ilefs*14',   gnomad_af: 0.000007 },
+  // ATM (chr11)
+  'chr11:108225612':{ gene: 'ATM',   hgvs_c: 'c.7271T>G',          hgvs_p: 'p.Val2424Gly',       gnomad_af: 0.000031 },
+  'chr11:108236186':{ gene: 'ATM',   hgvs_c: 'c.8545C>T',          hgvs_p: 'p.Arg2849*',         gnomad_af: null },
+  // CHEK2 (chr22)
+  'chr22:29091857': { gene: 'CHEK2', hgvs_c: 'c.1100delC',         hgvs_p: 'p.Thr367Metfs*15',   gnomad_af: 0.000029 },
+  'chr22:29107980': { gene: 'CHEK2', hgvs_c: 'c.470T>C',           hgvs_p: 'p.Ile157Thr',        gnomad_af: 0.0083 },
+  // CDH1 (chr16) - Hereditary Diffuse Gastric Cancer
+  'chr16:68771217': { gene: 'CDH1',  hgvs_c: 'c.2287G>T',          hgvs_p: 'p.Glu763*',          gnomad_af: null },
+  // PTEN (chr10)
+  'chr10:89692905': { gene: 'PTEN',  hgvs_c: 'c.697C>T',           hgvs_p: 'p.Arg233*',          gnomad_af: null },
+  // SCN5A (chr3) - Brugada / Long QT type 3
+  'chr3:38674895':  { gene: 'SCN5A', hgvs_c: 'c.3578G>A',          hgvs_p: 'p.Arg1193Gln',       gnomad_af: null },
+  'chr3:38592934':  { gene: 'SCN5A', hgvs_c: 'c.4813C>T',          hgvs_p: 'p.Arg1605*',         gnomad_af: null },
+  // KCNH2 (chr7) - Long QT type 2
+  'chr7:117548628': { gene: 'KCNH2', hgvs_c: 'c.1764G>A',          hgvs_p: 'p.Ala588Thr',        gnomad_af: null },
+  'chr7:117640873': { gene: 'KCNH2', hgvs_c: 'c.453delC',          hgvs_p: 'p.Ala152Profs*26',   gnomad_af: null },
+  // KCNE1 (chr11) - Long QT type 5
+  'chr11:2549926':  { gene: 'KCNE1', hgvs_c: 'c.253G>A',           hgvs_p: 'p.Asp85Asn',         gnomad_af: 0.000096 },
+  'chr11:2550747':  { gene: 'KCNE1', hgvs_c: 'c.311T>C',           hgvs_p: 'p.Ile104Thr',        gnomad_af: null },
+  // KCNQ1 (chr1 position used in cardio VCF) - Long QT type 1
+  'chr1:216247030': { gene: 'KCNQ1', hgvs_c: 'c.1831C>T',          hgvs_p: 'p.Arg611Cys',        gnomad_af: null },
+}
+
 // Step 0: Format clinical indication to professional language
 export async function formatClinicalIndication(caseId: string, rawIndication: string): Promise<string> {
   'use step'
@@ -146,22 +204,90 @@ export async function parseVcf(caseId: string, vcfData: string | undefined, gene
       { hgvs_c: 'c.1100delC', hgvs_p: 'p.Thr367Metfs*15', chromosome: 'chr22', position: 29091857, ref_allele: 'TC', alt_allele: 'T' },
       { hgvs_c: 'c.470T>C', hgvs_p: 'p.Ile157Thr', chromosome: 'chr22', position: 29107980, ref_allele: 'T', alt_allele: 'C' },
     ],
+    // Arrhythmia genes
+    'SCN5A': [
+      { hgvs_c: 'c.3578G>A',  hgvs_p: 'p.Arg1193Gln',       chromosome: 'chr3',  position: 38674895,  ref_allele: 'G',   alt_allele: 'A' },
+      { hgvs_c: 'c.4813C>T',  hgvs_p: 'p.Arg1605*',         chromosome: 'chr3',  position: 38592934,  ref_allele: 'C',   alt_allele: 'T' },
+    ],
+    'KCNH2': [
+      { hgvs_c: 'c.1764G>A',  hgvs_p: 'p.Ala588Thr',        chromosome: 'chr7',  position: 117548628, ref_allele: 'G',   alt_allele: 'A' },
+      { hgvs_c: 'c.453delC',  hgvs_p: 'p.Ala152Profs*26',   chromosome: 'chr7',  position: 117640873, ref_allele: 'CT',  alt_allele: 'C' },
+    ],
+    'KCNE1': [
+      { hgvs_c: 'c.253G>A',   hgvs_p: 'p.Asp85Asn',         chromosome: 'chr11', position: 2549926,   ref_allele: 'G',   alt_allele: 'A' },
+      { hgvs_c: 'c.311T>C',   hgvs_p: 'p.Ile104Thr',        chromosome: 'chr11', position: 2550747,   ref_allele: 'A',   alt_allele: 'G' },
+    ],
+    'KCNQ1': [
+      { hgvs_c: 'c.1831C>T',  hgvs_p: 'p.Arg611Cys',        chromosome: 'chr1',  position: 216247030, ref_allele: 'C',   alt_allele: 'T' },
+      { hgvs_c: 'c.1057G>A',  hgvs_p: 'p.Gly353Arg',        chromosome: 'chr11', position: 2461447,   ref_allele: 'G',   alt_allele: 'A' },
+    ],
+    'PTEN': [
+      { hgvs_c: 'c.697C>T',   hgvs_p: 'p.Arg233*',          chromosome: 'chr10', position: 89692905,  ref_allele: 'G',   alt_allele: 'A' },
+    ],
+    'CDH1': [
+      { hgvs_c: 'c.2287G>T',  hgvs_p: 'p.Glu763*',          chromosome: 'chr16', position: 68771217,  ref_allele: 'C',   alt_allele: 'A' },
+    ],
   }
   
-  for (const gene of genePanel) {
+  if (vcfData) {
+    // Parse real VCF content — match positions against known variant definitions
+    const genesInPanel = new Set(genePanel)
+    const vcfLines = vcfData.split('\n').filter(l => l.trim() && !l.startsWith('#'))
+
+    for (const line of vcfLines) {
+      const cols = line.split('\t')
+      if (cols.length < 9) continue
+      const [chrom, pos, id, ref, alt, , , , format, ...samples] = cols
+      const position = parseInt(pos)
+      const key = `${chrom}:${position}`
+      const def = POSITION_TO_VARIANT[key]
+
+      if (!def || !genesInPanel.has(def.gene)) continue
+
+      // Parse GT field for zygosity
+      const fmtFields = format.split(':')
+      const gtIdx = fmtFields.indexOf('GT')
+      const sample = samples[0] || ''
+      const gt = gtIdx >= 0 ? (sample.split(':')[gtIdx] || '0/1') : '0/1'
+      const isHom = gt === '1/1' || gt === '1|1'
+      const isEmbryonicLethalGene = EMBRYONIC_LETHAL_GENES.includes(def.gene)
+      const zygosity: 'heterozygous' | 'homozygous' = (isHom && !isEmbryonicLethalGene)
+        ? 'homozygous'
+        : 'heterozygous'
+
+      variants.push({
+        gene: def.gene,
+        hgvs_c: def.hgvs_c,
+        hgvs_p: def.hgvs_p,
+        chromosome: chrom,
+        position,
+        ref_allele: ref,
+        alt_allele: alt,
+        zygosity,
+        gnomad_af: def.gnomad_af,
+        clinvar_id: id !== '.' ? id : `VCV${Math.floor(Math.random() * 1000000).toString().padStart(9, '0')}`,
+        clinvar_significance: null,
+      })
+    }
+  }
+
+  // Fall back to random template selection for any gene not covered by VCF
+  const coveredGenes = new Set(variants.map(v => v.gene))
+  const uncoveredGenes = genePanel.filter(g => !coveredGenes.has(g))
+
+  for (const gene of uncoveredGenes) {
     const templates = variantTemplates[gene] || []
-    // Pick 1-2 variants per gene for demo
+    if (templates.length === 0) continue
     const numVariants = Math.min(Math.floor(Math.random() * 2) + 1, templates.length)
     const shuffled = [...templates].sort(() => Math.random() - 0.5)
-    
+
     for (let i = 0; i < numVariants && i < shuffled.length; i++) {
       const template = shuffled[i]
-      
-      // Bug 4 fix: For cancer predisposition genes, always use heterozygous
-      // Homozygous loss is typically embryonically lethal
       const isEmbryonicLethalGene = EMBRYONIC_LETHAL_GENES.includes(gene)
-      const zygosity = isEmbryonicLethalGene ? 'heterozygous' : (Math.random() > 0.3 ? 'heterozygous' : 'homozygous')
-      
+      const zygosity: 'heterozygous' | 'homozygous' = isEmbryonicLethalGene
+        ? 'heterozygous'
+        : (Math.random() > 0.3 ? 'heterozygous' : 'homozygous')
+
       variants.push({
         gene,
         hgvs_c: template.hgvs_c!,
@@ -177,8 +303,8 @@ export async function parseVcf(caseId: string, vcfData: string | undefined, gene
       })
     }
   }
-  
-  // Ensure at least one variant for demo
+
+  // Guarantee at least one variant for demo
   if (variants.length === 0 && genePanel.length > 0) {
     const gene = genePanel[0]
     const templates = variantTemplates[gene]
@@ -214,70 +340,123 @@ export async function parseVcf(caseId: string, vcfData: string | undefined, gene
   return variants
 }
 
-// Step 2: Query ClinVar for existing annotations
+// ─── ClinVar E-utilities helpers ──────────────────────────────────────────────
+
+const NCBI_BASE = 'https://eutils.ncbi.nlm.nih.gov/entrez/eutils'
+
+function ncbiUrl(endpoint: string, params: Record<string, string>): string {
+  const apiKey = process.env.NCBI_API_KEY
+  const p = new URLSearchParams({ ...params, retmode: 'json' })
+  if (apiKey) p.set('api_key', apiKey)
+  return `${NCBI_BASE}/${endpoint}?${p}`
+}
+
+function reviewStatusToStars(status: string): number {
+  if (status.includes('practice guideline')) return 4
+  if (status.includes('reviewed by expert panel')) return 3
+  if (status.includes('multiple submitters') && status.includes('no conflicts')) return 2
+  if (status.includes('criteria provided')) return 1
+  return 0
+}
+
+async function fetchClinvarByRsId(rsId: string): Promise<{ significance: string; stars: number; accession: string } | null> {
+  try {
+    // Step 1: find the ClinVar UID for this rsID
+    const searchRes = await fetch(ncbiUrl('esearch.fcgi', { db: 'clinvar', term: `${rsId}[rsID]` }))
+    if (!searchRes.ok) return null
+    const searchJson = await searchRes.json()
+    const ids: string[] = searchJson.esearchresult?.idlist ?? []
+    if (ids.length === 0) return null
+
+    // Step 2: get the summary record
+    const summaryRes = await fetch(ncbiUrl('esummary.fcgi', { db: 'clinvar', id: ids[0] }))
+    if (!summaryRes.ok) return null
+    const summaryJson = await summaryRes.json()
+    const record = summaryJson.result?.[ids[0]]
+    if (!record) return null
+
+    // ClinVar API uses either `germline_classification` (newer) or `clinical_significance` (older)
+    const classObj = record.germline_classification ?? record.clinical_significance ?? {}
+    const significance: string = classObj.description ?? ''
+    const reviewStatus: string = classObj.review_status ?? ''
+    const accession: string = record.accession ?? ''
+
+    if (!significance) return null
+    return { significance, stars: reviewStatusToStars(reviewStatus), accession }
+  } catch {
+    return null
+  }
+}
+
+// Step 2: Query ClinVar — real NCBI E-utilities API
 export async function queryClinvar(caseId: string, variants: Variant[]): Promise<Variant[]> {
   'use step'
-  
+
   const supabase = createClient()
-  
+
   await supabase
     .from('pipeline_steps')
     .update({ status: 'running', started_at: new Date().toISOString() })
     .eq('case_id', caseId)
     .eq('step_name', 'ClinVar Query')
-  
-  // Bug 2 fix: Check for known pathogenic hotspots first
-  const annotated = variants.map(v => {
+
+  // Rate limit: 10 req/sec with NCBI key, 3 req/sec without (2 calls per variant)
+  const delayMs = process.env.NCBI_API_KEY ? 120 : 450
+  const annotated: Variant[] = []
+  let realLookups = 0
+  let hotspotHits = 0
+
+  for (const v of variants) {
+    // Fast path: known 4-star pathogenic hotspot — no API call needed
     const hotspotKey = `${v.gene}:${v.hgvs_c}`
     const hotspotData = KNOWN_PATHOGENIC_HOTSPOTS[hotspotKey]
-    
     if (hotspotData) {
-      // Known pathogenic hotspot - use 4-star consensus
-      return { 
-        ...v, 
-        clinvar_significance: 'Pathogenic',
-        clinvar_stars: hotspotData.clinvar_stars
-      }
+      annotated.push({ ...v, clinvar_significance: 'Pathogenic', clinvar_stars: hotspotData.clinvar_stars })
+      hotspotHits++
+      continue
     }
-    
-    if (v.clinvar_id) {
-      // Regular ClinVar lookup with realistic distribution
-      const significances = ['Pathogenic', 'Likely pathogenic', 'Uncertain significance', 'Likely benign', 'Benign']
-      const weights = [0.12, 0.13, 0.50, 0.15, 0.10]
-      const rand = Math.random()
-      let cumulative = 0
-      let significance = 'Uncertain significance'
-      for (let i = 0; i < weights.length; i++) {
-        cumulative += weights[i]
-        if (rand < cumulative) {
-          significance = significances[i]
-          break
-        }
+
+    // Real API lookup for variants with an rsID (from parsed VCF)
+    if (v.clinvar_id?.startsWith('rs')) {
+      const result = await fetchClinvarByRsId(v.clinvar_id)
+      if (result) {
+        annotated.push({
+          ...v,
+          clinvar_significance: result.significance,
+          clinvar_stars: result.stars,
+          clinvar_id: result.accession || v.clinvar_id,
+        })
+        realLookups++
+        await new Promise(r => setTimeout(r, delayMs))
+        continue
       }
-      // Assign random star rating (1-3 for non-hotspots)
-      const stars = Math.floor(Math.random() * 3) + 1
-      return { ...v, clinvar_significance: significance, clinvar_stars: stars }
+      await new Promise(r => setTimeout(r, delayMs))
     }
-    return v
-  })
-  
+
+    // No rsID or API returned nothing — mark as not in ClinVar
+    annotated.push({ ...v, clinvar_significance: null })
+  }
+
   const clinvarHits = annotated.filter(v => v.clinvar_significance).length
-  
+
   await supabase
     .from('pipeline_steps')
-    .update({ 
-      status: 'completed', 
+    .update({
+      status: 'completed',
       completed_at: new Date().toISOString(),
-      duration_ms: 1800 + Math.floor(Math.random() * 500),
-      output: { 
+      duration_ms: variants.length * delayMs * 2 + 500,
+      output: {
         clinvar_hits: clinvarHits,
+        real_api_lookups: realLookups,
+        hotspot_hits: hotspotHits,
         pathogenic_in_clinvar: annotated.filter(v => v.clinvar_significance === 'Pathogenic').length,
-        four_star_pathogenic: annotated.filter(v => v.clinvar_stars === 4 && v.clinvar_significance === 'Pathogenic').length
-      }
+        four_star_pathogenic: annotated.filter(v => v.clinvar_stars === 4 && v.clinvar_significance === 'Pathogenic').length,
+        api_source: 'NCBI ClinVar E-utilities',
+      },
     })
     .eq('case_id', caseId)
     .eq('step_name', 'ClinVar Query')
-  
+
   return annotated
 }
 

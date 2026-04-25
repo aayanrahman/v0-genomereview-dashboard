@@ -4,7 +4,8 @@ import { createClient } from '@/lib/supabase/server';
 import { VariantClassificationBadge } from '@/components/variant-classification-badge';
 import { Button } from '@/components/ui/button';
 import { ShareButton } from '@/components/share-button';
-import { ArrowLeft, Printer, Download, ChevronDown, Info } from 'lucide-react';
+import { ArrowLeft, Printer, ChevronDown, Info } from 'lucide-react';
+import { DownloadPdfButton } from '@/components/download-pdf-button';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 
 export const dynamic = 'force-dynamic';
@@ -66,10 +67,7 @@ export default async function ReportPage({ params }: PageProps) {
                 pipelineTimeMs,
               }}
             />
-            <Button variant="outline" size="sm" className="gap-2">
-              <Download className="h-4 w-4" />
-              Download PDF
-            </Button>
+            <DownloadPdfButton />
             <Button 
               variant="outline" 
               size="sm" 

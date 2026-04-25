@@ -1,9 +1,11 @@
 'use client';
 
 import Link from 'next/link';
-import { usePathname } from 'next/navigation';
+import { usePathname, useRouter } from 'next/navigation';
 import { cn } from '@/lib/utils';
-import { LayoutDashboard, FolderOpen, FileText, Settings, Dna } from 'lucide-react';
+import { LayoutDashboard, FolderOpen, FileText, Settings, Dna, LogOut } from 'lucide-react';
+import { createClient } from '@/lib/supabase/client';
+import { useEffect, useState } from 'react';
 
 const navigation = [
   { name: 'Dashboard', href: '/', icon: LayoutDashboard },
@@ -14,6 +16,25 @@ const navigation = [
 
 export function AppSidebar() {
   const pathname = usePathname();
+  const router = useRouter();
+  const [email, setEmail] = useState<string | null>(null);
+
+  useEffect(() => {
+    const supabase = createClient();
+    supabase.auth.getUser().then(({ data: { user } }) => {
+      setEmail(user?.email ?? null);
+    });
+  }, []);
+
+  async function handleSignOut() {
+    const supabase = createClient();
+    await supabase.auth.signOut();
+    router.push('/login');
+  }
+
+  const initials = email
+    ? email.slice(0, 2).toUpperCase()
+    : '??';
 
   return (
     <aside className="fixed left-0 top-0 z-40 flex h-screen w-64 flex-col bg-sidebar text-sidebar-foreground">
@@ -30,9 +51,9 @@ export function AppSidebar() {
       <nav className="flex-1 px-3 py-4">
         <ul className="space-y-1">
           {navigation.map((item) => {
-            const isActive = pathname === item.href || 
+            const isActive = pathname === item.href ||
               (item.href !== '/' && pathname.startsWith(item.href));
-            
+
             return (
               <li key={item.name}>
                 <Link
@@ -55,13 +76,20 @@ export function AppSidebar() {
 
       <div className="border-t border-sidebar-border px-4 py-4">
         <div className="flex items-center gap-3">
-          <div className="flex h-8 w-8 items-center justify-center rounded-full bg-sidebar-accent text-sm font-medium">
-            MT
+          <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-sidebar-accent text-sm font-medium">
+            {initials}
           </div>
-          <div className="flex-1 truncate">
-            <p className="text-sm font-medium">Dr. Michael Torres</p>
-            <p className="text-xs text-sidebar-foreground/60">Clinical Geneticist</p>
+          <div className="flex-1 min-w-0">
+            <p className="text-sm font-medium truncate">{email ?? '...'}</p>
+            <p className="text-xs text-sidebar-foreground/60">Signed in</p>
           </div>
+          <button
+            onClick={handleSignOut}
+            title="Sign out"
+            className="shrink-0 text-sidebar-foreground/40 hover:text-sidebar-foreground/80 transition-colors"
+          >
+            <LogOut className="h-4 w-4" />
+          </button>
         </div>
       </div>
     </aside>

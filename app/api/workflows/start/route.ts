@@ -1,22 +1,30 @@
 import { start } from 'workflow/api'
 import { genomicsPipeline } from '@/app/workflows/genomics-pipeline'
 import { createClient } from '@/lib/supabase/admin'
+import { createClient as createServerClient } from '@/lib/supabase/server'
 import { NextResponse } from 'next/server'
 
 export async function POST(request: Request) {
   try {
+    const serverSupabase = await createServerClient()
+    const { data: { user } } = await serverSupabase.auth.getUser()
+
+    if (!user) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    }
+
     const body = await request.json()
-    const { 
-      patientName, 
-      patientDob, 
-      mrn, 
-      orderingPhysician, 
-      indication, 
-      genePanel, 
+    const {
+      patientName,
+      patientDob,
+      mrn,
+      orderingPhysician,
+      indication,
+      genePanel,
       priority,
-      vcfData 
+      vcfData
     } = body
-    
+
     const supabase = createClient()
     
     // Create case in database
@@ -31,6 +39,7 @@ export async function POST(request: Request) {
         gene_panel: genePanel,
         priority: priority || 'routine',
         status: 'pending',
+        user_id: user.id,
       })
       .select()
       .single()

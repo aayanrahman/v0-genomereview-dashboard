@@ -11,14 +11,83 @@ import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { Switch } from '@/components/ui/switch';
 import { GENE_PANELS } from '@/lib/types';
 import { toast } from 'sonner';
-import { Upload, X, Check, Loader2, Users } from 'lucide-react';
+import { Upload, X, Check, Loader2, Users, FlaskConical } from 'lucide-react';
 import { cn } from '@/lib/utils';
+
+const TEST_SCENARIOS = [
+  {
+    label: 'Hereditary Breast Cancer',
+    subtitle: 'BRCA1/2 · PALB2',
+    vcf: 'brca_hereditary_breast.vcf',
+    panelIds: ['comprehensive'],
+    patient: {
+      patientName: 'Sarah Mitchell',
+      patientDob: '1978-03-15',
+      mrn: 'MRN-2024-0891',
+      orderingPhysician: 'Dr. Emily Chen',
+      indication: 'Strong family history of breast cancer (mother and maternal aunt). Personal history of atypical ductal hyperplasia on biopsy. Referred for germline hereditary cancer risk assessment.',
+    },
+  },
+  {
+    label: 'Li-Fraumeni Syndrome',
+    subtitle: 'TP53 · CHEK2 · ATM',
+    vcf: 'li_fraumeni_tp53.vcf',
+    panelIds: ['comprehensive'],
+    patient: {
+      patientName: 'James Rodriguez',
+      patientDob: '1985-07-22',
+      mrn: 'MRN-2024-0445',
+      orderingPhysician: 'Dr. Michael Park',
+      indication: 'History of osteosarcoma at age 16 and adrenocortical carcinoma at age 32. Father with brain tumor, sister with early-onset breast cancer. Testing for Li-Fraumeni syndrome.',
+    },
+  },
+  {
+    label: 'Lynch Syndrome',
+    subtitle: 'MLH1 · MSH2 · MSH6',
+    vcf: 'lynch_syndrome_colon.vcf',
+    panelIds: ['lynch'],
+    patient: {
+      patientName: 'Margaret Thompson',
+      patientDob: '1962-11-08',
+      mrn: 'MRN-2024-0223',
+      orderingPhysician: 'Dr. Rachel Kim',
+      indication: 'Colorectal cancer at age 55 with microsatellite instability on tumor testing. Amsterdam II criteria met: father with colorectal cancer, paternal uncle with endometrial cancer.',
+    },
+  },
+  {
+    label: 'Cardiac Arrhythmia',
+    subtitle: 'SCN5A · KCNH2 · KCNE1',
+    vcf: 'cardio_arrhythmia.vcf',
+    panelIds: ['arrhythmia'],
+    patient: {
+      patientName: 'David Chen',
+      patientDob: '1990-04-30',
+      mrn: 'MRN-2024-0567',
+      orderingPhysician: 'Dr. Sarah Wilson',
+      indication: 'Recurrent syncope and palpitations. QTc 520ms on ECG. Sibling with sudden cardiac death at age 28. Evaluation for inherited long QT or Brugada syndrome.',
+    },
+  },
+  {
+    label: 'Comprehensive Cancer Panel',
+    subtitle: 'BRCA1/2 · TP53 · PTEN · CDH1',
+    vcf: 'test_comprehensive_cancer.vcf',
+    panelIds: ['comprehensive'],
+    patient: {
+      patientName: 'Amanda Foster',
+      patientDob: '1972-09-14',
+      mrn: 'MRN-2024-0789',
+      orderingPhysician: 'Dr. John Lee',
+      indication: 'Triple-negative breast cancer diagnosed at age 48. Family history of ovarian cancer (maternal grandmother) and pancreatic cancer (maternal uncle). Comprehensive hereditary cancer risk assessment.',
+    },
+  },
+] as const;
 
 export function NewCaseForm() {
   const router = useRouter();
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [dragActive, setDragActive] = useState(false);
   const [trioMode, setTrioMode] = useState(false);
+  const [loadingPreset, setLoadingPreset] = useState<string | null>(null);
   
   const [formData, setFormData] = useState({
     patientName: '',
@@ -82,6 +151,29 @@ export function NewCaseForm() {
         ? prev.genePanels.filter(id => id !== panelId)
         : [...prev.genePanels, panelId],
     }));
+  };
+
+  const loadPreset = async (scenario: typeof TEST_SCENARIOS[number]) => {
+    setLoadingPreset(scenario.vcf);
+    try {
+      const res = await fetch(`/fixtures/${scenario.vcf}`);
+      if (!res.ok) throw new Error('VCF not found');
+      const text = await res.text();
+      const file = new File([text], scenario.vcf, { type: 'text/plain' });
+      setFormData(prev => ({
+        ...prev,
+        ...scenario.patient,
+        genePanels: [...scenario.panelIds],
+        vcfFile: file,
+      }));
+      toast.success(`Loaded: ${scenario.label}`, {
+        description: `${scenario.vcf} ready · ${scenario.panelIds.join(', ')} panel selected`,
+      });
+    } catch {
+      toast.error('Could not load VCF', { description: scenario.vcf });
+    } finally {
+      setLoadingPreset(null);
+    }
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -173,6 +265,40 @@ export function NewCaseForm() {
 
   return (
     <form onSubmit={handleSubmit} className="space-y-8">
+      {/* Test Scenarios */}
+      <Card className="border-border/50 p-6">
+        <div className="mb-4 flex items-center gap-2">
+          <FlaskConical className="h-4 w-4 text-accent" />
+          <h2 className="text-lg font-semibold text-foreground">Test Scenarios</h2>
+          <span className="rounded-full bg-accent/10 px-2 py-0.5 text-xs font-medium text-accent">5 VCFs included</span>
+        </div>
+        <p className="mb-4 text-sm text-muted-foreground">
+          Click any scenario to pre-fill the form and load its VCF file automatically.
+        </p>
+        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5">
+          {TEST_SCENARIOS.map((scenario) => {
+            const isLoading = loadingPreset === scenario.vcf;
+            return (
+              <button
+                key={scenario.vcf}
+                type="button"
+                onClick={() => loadPreset(scenario)}
+                disabled={isLoading}
+                className="flex flex-col items-start gap-1.5 rounded-lg border border-border/50 bg-muted/20 p-3 text-left transition-colors hover:border-accent/40 hover:bg-accent/5 disabled:cursor-not-allowed disabled:opacity-60"
+              >
+                {isLoading ? (
+                  <Loader2 className="h-4 w-4 animate-spin text-accent" />
+                ) : (
+                  <span className="text-lg">🧬</span>
+                )}
+                <p className="text-sm font-medium text-foreground leading-tight">{scenario.label}</p>
+                <p className="text-[11px] text-muted-foreground font-mono">{scenario.subtitle}</p>
+              </button>
+            );
+          })}
+        </div>
+      </Card>
+
       <Card className="border-border/50 p-6">
         <h2 className="mb-6 text-lg font-semibold text-foreground">Patient Information</h2>
         

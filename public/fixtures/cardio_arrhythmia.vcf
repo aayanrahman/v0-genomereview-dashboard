@@ -1,0 +1,23 @@
+##fileformat=VCFv4.2
+##fileDate=20260425
+##source=GenomeReview_Demo
+##reference=GRCh38
+##contig=<ID=chr3,length=198295559>
+##contig=<ID=chr7,length=159345973>
+##contig=<ID=chr11,length=135086622>
+##contig=<ID=chr1,length=248956422>
+##FILTER=<ID=PASS,Description="All filters passed">
+##INFO=<ID=DP,Number=1,Type=Integer,Description="Total read depth">
+##INFO=<ID=AF,Number=A,Type=Float,Description="Allele frequency">
+##FORMAT=<ID=GT,Number=1,Type=String,Description="Genotype">
+##FORMAT=<ID=DP,Number=1,Type=Integer,Description="Read depth">
+##FORMAT=<ID=AD,Number=R,Type=Integer,Description="Allelic depths">
+##FORMAT=<ID=GQ,Number=1,Type=Integer,Description="Genotype quality">
+#CHROM	POS	ID	REF	ALT	QUAL	FILTER	INFO	FORMAT	DEMO-CARDIO-001
+chr3	38674895	rs199473554	G	A	910	PASS	DP=154;AF=0.51	GT:DP:AD:GQ	0/1:154:75,79:99
+chr7	117548628	rs397508526	G	A	850	PASS	DP=142;AF=0.50	GT:DP:AD:GQ	0/1:142:71,71:99
+chr11	2549926	rs199502876	G	A	740	PASS	DP=124;AF=0.48	GT:DP:AD:GQ	0/1:124:65,59:99
+chr3	38592934	rs199473551	C	T	560	PASS	DP=93;AF=0.43	GT:DP:AD:GQ	0/1:93:53,40:97
+chr1	216247030	rs727504290	C	T	470	PASS	DP=80;AF=0.41	GT:DP:AD:GQ	0/1:80:47,33:95
+chr11	2550747	rs199502877	A	G	350	PASS	DP=66;AF=0.37	GT:DP:AD:GQ	0/1:66:42,24:90
+chr7	117640873	rs397508528	C	T	270	PASS	DP=56;AF=0.32	GT:DP:AD:GQ	0/1:56:38,18:83

@@ -38,7 +38,7 @@ export function ShareModal({ isOpen, onClose, data }: ShareModalProps) {
     ? `${data.genePanelArray.slice(0, 3).join(', ')} +${data.genePanelArray.length - 3} genes`
     : data.genePanelArray.join(', ');
 
-  const appUrl = data.appUrl || 'genomereview.app';
+  const appUrl = data.appUrl || 'https://genomereview.vercel.app/';
 
   const tweetText = `Built a durable genomics AI in ${pipelineDuration} 🧬
 VCF → AlphaGenome → Claude → clinical report

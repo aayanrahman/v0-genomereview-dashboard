@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import React, { useState } from 'react';
 import { VariantClassificationBadge } from '@/components/variant-classification-badge';
 import { LongitudinalDelta } from '@/components/longitudinal-delta';
 import { ChevronDown, ChevronRight, AlertTriangle } from 'lucide-react';
@@ -108,9 +108,8 @@ export function VariantsTable({ variants, showDelta = false }: VariantsTableProp
               const hasZygosityWarning = variant.aiReasoning?.includes('Zygosity requires confirmation');
               
               return (
-                <>
-                  <tr 
-                    key={variant.id}
+                <React.Fragment key={variant.id}>
+                  <tr
                     className={cn(
                       'cursor-pointer transition-colors hover:bg-muted/20',
                       isExpanded && 'bg-muted/20',
@@ -242,7 +241,7 @@ export function VariantsTable({ variants, showDelta = false }: VariantsTableProp
                       </td>
                     </tr>
                   )}
-                </>
+                </React.Fragment>
               );
             })}
           </tbody>
