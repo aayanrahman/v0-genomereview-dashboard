@@ -23,7 +23,7 @@ export function AppSidebar() {
         </div>
         <div>
           <h1 className="text-lg font-semibold tracking-tight">GenomeReview</h1>
-          <p className="text-xs text-sidebar-foreground/60">Clinical Variant Analysis</p>
+          <p className="text-[10px] text-sidebar-foreground/50">AlphaGenome-powered · the first durable genomics pipeline</p>
         </div>
       </div>
 
