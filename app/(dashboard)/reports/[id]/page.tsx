@@ -132,7 +132,7 @@ export default async function ReportPage({ params }: PageProps) {
 
           <div className="mt-6">
             <p className="text-sm text-muted-foreground">Clinical Indication</p>
-            <p className="mt-1 text-sm text-foreground">{caseData.indication}</p>
+            <p className="mt-1 text-sm text-foreground">{caseData.formatted_indication || caseData.indication}</p>
           </div>
         </header>
 

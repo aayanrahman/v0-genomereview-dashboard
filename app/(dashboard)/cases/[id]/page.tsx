@@ -93,7 +93,7 @@ async function getCaseData(id: string) {
     patientDob: caseData.patient_dob,
     mrn: caseData.mrn,
     orderingPhysician: caseData.ordering_physician,
-    indication: caseData.indication,
+    indication: caseData.formatted_indication || caseData.indication,
     genePanel: caseData.gene_panel.join(', '),
     genePanelArray: caseData.gene_panel,
     priority: caseData.priority.charAt(0).toUpperCase() + caseData.priority.slice(1),

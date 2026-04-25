@@ -40,19 +40,11 @@ export function ShareModal({ isOpen, onClose, data }: ShareModalProps) {
 
   const appUrl = data.appUrl || 'genomereview.app';
 
-  const tweetText = `Just built a durable genomics AI pipeline for a hackathon 🧬
-
-Upload a VCF → AlphaGenome scores every variant → Claude applies ACMG criteria → physician-grade report
-
-Found ${data.pathogenicCount} pathogenic variant${data.pathogenicCount !== 1 ? 's' : ''} across ${genePanelDisplay} in ${pipelineDuration}
-
-If it crashes mid-run, @vercel WDK resumes from the exact checkpoint 🔁
-
-Built with @anthropic Claude + @GoogleDeepMind AlphaGenome
-
-${appUrl}
-
-#Genomics #AI #WDK #Hackathon`;
+  const tweetText = `Built a durable genomics AI in ${pipelineDuration} 🧬
+VCF → AlphaGenome → Claude → clinical report
+Crash mid-run → resumes from checkpoint, zero data lost
+${data.pathogenicCount} pathogenic variant${data.pathogenicCount !== 1 ? 's' : ''}. ${genePanelDisplay}.
+@vercel @anthropic @GoogleDeepMind ${appUrl}`;
 
   const handleCopyTweet = async () => {
     await navigator.clipboard.writeText(tweetText);

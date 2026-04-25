@@ -80,10 +80,10 @@ Respond with ONLY the formatted clinical indication text, nothing else.`
     
     const formatted = result.text.trim()
     
-    // Update the case with formatted indication
+    // Update the case with formatted indication (save to separate column)
     await supabase
       .from('cases')
-      .update({ indication: formatted })
+      .update({ formatted_indication: formatted })
       .eq('id', caseId)
     
     return formatted
