@@ -321,6 +321,7 @@ export async function runAlphaGenome(caseId: string, variants: Variant[]): Promi
       alphagenome_effect: prediction.predictedEffect,
       alphagenome_prediction: prediction,
       splice_effect: prediction.spliceEffect.type !== 'none' ? prediction.spliceEffect.type : null,
+      ag_source: prediction.source, // Track whether this was real AlphaGenome or estimated
     })
   }
   
@@ -522,6 +523,7 @@ Valid classifications: pathogenic, likely_pathogenic, vus, likely_benign, benign
       acmg_criteria: v.acmg_criteria,
       ai_reasoning: v.ai_reasoning + (v.zygosity_warning ? `\n\n⚠️ ${v.zygosity_warning}` : ''),
       ai_confidence: v.ai_confidence,
+      ag_source: v.ag_source || 'estimated', // Track AlphaGenome vs estimated
     })
   }
   

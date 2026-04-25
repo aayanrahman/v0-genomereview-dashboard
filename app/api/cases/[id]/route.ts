@@ -49,7 +49,7 @@ export async function GET(
       patientDob: caseData.patient_dob,
       mrn: caseData.mrn,
       orderingPhysician: caseData.ordering_physician,
-      indication: caseData.indication,
+      indication: caseData.formatted_indication || caseData.indication,
       genePanel: caseData.gene_panel,
       priority: caseData.priority,
       status: formatStatus(caseData.status),
@@ -75,6 +75,7 @@ export async function GET(
         aiConfidence: v.ai_confidence,
         reviewed: v.reviewed,
         reviewerNotes: v.reviewer_notes,
+        agSource: v.ag_source, // AlphaGenome vs Estimated
       })) || [],
       pipelineSteps: pipelineSteps?.map(step => ({
         name: step.step_name,

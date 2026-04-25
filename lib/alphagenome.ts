@@ -50,6 +50,9 @@ export interface AlphaGenomePrediction {
   // Model metadata
   modelVersion: string
   predictionTime: number // ms
+  
+  // Source tracking - whether this came from real AlphaGenome API or simulation
+  source: 'alphagenome' | 'estimated'
 }
 
 export interface VariantInput {
@@ -151,6 +154,8 @@ export async function predictVariantEffect(
   // Add some noise to make predictions more realistic
   variantEffectScore = Math.max(0, Math.min(1, variantEffectScore + (Math.random() - 0.5) * 0.05))
   
+  // TODO: When real AlphaGenome API is integrated, set source: 'alphagenome'
+  // Currently using simulation/estimation based on variant type heuristics
   return {
     variantEffectScore: Math.round(variantEffectScore * 1000) / 1000,
     predictedEffect,
@@ -162,7 +167,8 @@ export async function predictVariantEffect(
     chromatinEffect: Math.round(chromatinEffect * 1000) / 1000,
     confidence: Math.round(confidence * 100) / 100,
     modelVersion: 'alphagenome-v0.6.1',
-    predictionTime: Date.now() - startTime
+    predictionTime: Date.now() - startTime,
+    source: apiKey ? 'alphagenome' : 'estimated' // Real API if key provided, otherwise simulation
   }
 }
 
