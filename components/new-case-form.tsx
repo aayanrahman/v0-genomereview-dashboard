@@ -8,15 +8,17 @@ import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Card } from '@/components/ui/card';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
+import { Switch } from '@/components/ui/switch';
 import { GENE_PANELS } from '@/lib/types';
 import { toast } from 'sonner';
-import { Upload, X, Check, Loader2 } from 'lucide-react';
+import { Upload, X, Check, Loader2, Users } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
 export function NewCaseForm() {
   const router = useRouter();
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [dragActive, setDragActive] = useState(false);
+  const [trioMode, setTrioMode] = useState(false);
   
   const [formData, setFormData] = useState({
     patientName: '',
@@ -27,6 +29,10 @@ export function NewCaseForm() {
     genePanels: [] as string[],
     vcfFile: null as File | null,
     priority: 'routine' as 'routine' | 'urgent' | 'stat',
+    // Trio mode data
+    probandSex: 'male' as 'male' | 'female',
+    motherVcfFile: null as File | null,
+    fatherVcfFile: null as File | null,
   });
 
   const handleDrag = useCallback((e: React.DragEvent) => {
@@ -56,9 +62,16 @@ export function NewCaseForm() {
     }
   }, []);
 
-  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>, target: 'proband' | 'mother' | 'father' = 'proband') => {
     if (e.target.files && e.target.files[0]) {
-      setFormData(prev => ({ ...prev, vcfFile: e.target.files![0] }));
+      const file = e.target.files[0];
+      if (target === 'proband') {
+        setFormData(prev => ({ ...prev, vcfFile: file }));
+      } else if (target === 'mother') {
+        setFormData(prev => ({ ...prev, motherVcfFile: file }));
+      } else {
+        setFormData(prev => ({ ...prev, fatherVcfFile: file }));
+      }
     }
   };
 
@@ -88,20 +101,35 @@ export function NewCaseForm() {
         vcfData = await formData.vcfFile.text();
       }
 
+      // Build request body
+      const requestBody: Record<string, unknown> = {
+        patientName: formData.patientName,
+        patientDob: formData.patientDob,
+        mrn: formData.mrn,
+        orderingPhysician: formData.orderingPhysician,
+        indication: formData.indication,
+        genePanel: [...new Set(selectedGenes)], // Deduplicate genes
+        priority: formData.priority,
+        vcfData,
+      };
+
+      // Add trio data if in trio mode
+      if (trioMode) {
+        requestBody.trioMode = true;
+        requestBody.probandSex = formData.probandSex;
+        if (formData.motherVcfFile) {
+          requestBody.motherVcfData = await formData.motherVcfFile.text();
+        }
+        if (formData.fatherVcfFile) {
+          requestBody.fatherVcfData = await formData.fatherVcfFile.text();
+        }
+      }
+
       // Call the real WDK workflow endpoint
       const response = await fetch('/api/workflows/start', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          patientName: formData.patientName,
-          patientDob: formData.patientDob,
-          mrn: formData.mrn,
-          orderingPhysician: formData.orderingPhysician,
-          indication: formData.indication,
-          genePanel: [...new Set(selectedGenes)], // Deduplicate genes
-          priority: formData.priority,
-          vcfData,
-        }),
+        body: JSON.stringify(requestBody),
       });
 
       const result = await response.json();
@@ -110,7 +138,7 @@ export function NewCaseForm() {
         throw new Error(result.error || 'Failed to start workflow');
       }
 
-      toast.success('Durable pipeline started', {
+      toast.success(trioMode ? 'Trio pipeline started' : 'Durable pipeline started', {
         description: (
           <div className="flex flex-col gap-1">
             <span className="font-mono text-xs">Workflow ID: {result.workflowId}</span>
@@ -246,58 +274,189 @@ export function NewCaseForm() {
         </div>
       </Card>
 
+      {/* Family Trio Mode Toggle (Feature 4) */}
       <Card className="border-border/50 p-6">
-        <h2 className="mb-6 text-lg font-semibold text-foreground">VCF File Upload (Optional)</h2>
-        <p className="mb-4 text-sm text-muted-foreground">
-          Upload a VCF file for analysis. If not provided, demo variants will be generated based on selected gene panels.
-        </p>
-        
-        <div
-          onDragEnter={handleDrag}
-          onDragLeave={handleDrag}
-          onDragOver={handleDrag}
-          onDrop={handleDrop}
-          className={cn(
-            'relative rounded-lg border-2 border-dashed p-8 text-center transition-colors',
-            dragActive && 'border-accent bg-accent/5',
-            formData.vcfFile && 'border-benign bg-benign/5',
-            !dragActive && !formData.vcfFile && 'border-border hover:border-muted-foreground'
-          )}
-        >
-          {formData.vcfFile ? (
-            <div className="flex items-center justify-center gap-4">
-              <div className="flex items-center gap-2 text-benign">
-                <Check className="h-5 w-5" />
-                <span className="font-medium">{formData.vcfFile.name}</span>
-              </div>
-              <Button
-                type="button"
-                variant="ghost"
-                size="sm"
-                onClick={() => setFormData(prev => ({ ...prev, vcfFile: null }))}
-              >
-                <X className="h-4 w-4" />
-              </Button>
+        <div className="flex items-center justify-between mb-6">
+          <div className="flex items-center gap-3">
+            <Users className="h-5 w-5 text-muted-foreground" />
+            <div>
+              <h2 className="text-lg font-semibold text-foreground">Family Trio Analysis</h2>
+              <p className="text-sm text-muted-foreground">Analyze proband with parents to identify inheritance patterns</p>
             </div>
-          ) : (
-            <>
-              <Upload className="mx-auto h-8 w-8 text-muted-foreground" />
-              <p className="mt-4 text-sm font-medium text-foreground">
-                Drag and drop your VCF file here
-              </p>
-              <p className="mt-1 text-xs text-muted-foreground">
-                or click to browse (.vcf, .vcf.gz)
-              </p>
-              <input
-                type="file"
-                accept=".vcf,.vcf.gz"
-                onChange={handleFileChange}
-                className="absolute inset-0 cursor-pointer opacity-0"
-              />
-            </>
-          )}
+          </div>
+          <Switch
+            checked={trioMode}
+            onCheckedChange={setTrioMode}
+          />
         </div>
+
+        {trioMode && (
+          <div className="space-y-6 border-t border-border/50 pt-6">
+            {/* Proband */}
+            <div className="rounded-lg border border-accent/30 bg-accent/5 p-4">
+              <div className="flex items-center justify-between mb-3">
+                <h3 className="text-sm font-semibold text-foreground">Proband VCF</h3>
+                <div className="flex items-center gap-2">
+                  <Label htmlFor="probandSex" className="text-xs text-muted-foreground">Biological sex:</Label>
+                  <select
+                    id="probandSex"
+                    value={formData.probandSex}
+                    onChange={(e) => setFormData(prev => ({ ...prev, probandSex: e.target.value as 'male' | 'female' }))}
+                    className="rounded-md border border-border bg-background px-2 py-1 text-xs"
+                  >
+                    <option value="male">Male</option>
+                    <option value="female">Female</option>
+                  </select>
+                </div>
+              </div>
+              <div className="relative rounded-md border border-dashed border-border p-4 text-center">
+                {formData.vcfFile ? (
+                  <div className="flex items-center justify-center gap-2 text-benign">
+                    <Check className="h-4 w-4" />
+                    <span className="text-sm font-medium">{formData.vcfFile.name}</span>
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => setFormData(prev => ({ ...prev, vcfFile: null }))}
+                    >
+                      <X className="h-3 w-3" />
+                    </Button>
+                  </div>
+                ) : (
+                  <>
+                    <p className="text-sm text-muted-foreground">Drop VCF or click to upload</p>
+                    <input
+                      type="file"
+                      accept=".vcf,.vcf.gz"
+                      onChange={(e) => handleFileChange(e, 'proband')}
+                      className="absolute inset-0 cursor-pointer opacity-0"
+                    />
+                  </>
+                )}
+              </div>
+            </div>
+
+            {/* Mother */}
+            <div className="rounded-lg border border-border/50 p-4">
+              <h3 className="text-sm font-semibold text-foreground mb-3">Mother VCF</h3>
+              <div className="relative rounded-md border border-dashed border-border p-4 text-center">
+                {formData.motherVcfFile ? (
+                  <div className="flex items-center justify-center gap-2 text-benign">
+                    <Check className="h-4 w-4" />
+                    <span className="text-sm font-medium">{formData.motherVcfFile.name}</span>
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => setFormData(prev => ({ ...prev, motherVcfFile: null }))}
+                    >
+                      <X className="h-3 w-3" />
+                    </Button>
+                  </div>
+                ) : (
+                  <>
+                    <p className="text-sm text-muted-foreground">Drop VCF or click to upload (optional)</p>
+                    <input
+                      type="file"
+                      accept=".vcf,.vcf.gz"
+                      onChange={(e) => handleFileChange(e, 'mother')}
+                      className="absolute inset-0 cursor-pointer opacity-0"
+                    />
+                  </>
+                )}
+              </div>
+            </div>
+
+            {/* Father */}
+            <div className="rounded-lg border border-border/50 p-4">
+              <h3 className="text-sm font-semibold text-foreground mb-3">Father VCF</h3>
+              <div className="relative rounded-md border border-dashed border-border p-4 text-center">
+                {formData.fatherVcfFile ? (
+                  <div className="flex items-center justify-center gap-2 text-benign">
+                    <Check className="h-4 w-4" />
+                    <span className="text-sm font-medium">{formData.fatherVcfFile.name}</span>
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => setFormData(prev => ({ ...prev, fatherVcfFile: null }))}
+                    >
+                      <X className="h-3 w-3" />
+                    </Button>
+                  </div>
+                ) : (
+                  <>
+                    <p className="text-sm text-muted-foreground">Drop VCF or click to upload (optional)</p>
+                    <input
+                      type="file"
+                      accept=".vcf,.vcf.gz"
+                      onChange={(e) => handleFileChange(e, 'father')}
+                      className="absolute inset-0 cursor-pointer opacity-0"
+                    />
+                  </>
+                )}
+              </div>
+            </div>
+          </div>
+        )}
       </Card>
+
+      {/* Standard VCF upload (hidden when trio mode is on) */}
+      {!trioMode && (
+        <Card className="border-border/50 p-6">
+          <h2 className="mb-6 text-lg font-semibold text-foreground">VCF File Upload (Optional)</h2>
+          <p className="mb-4 text-sm text-muted-foreground">
+            Upload a VCF file for analysis. If not provided, demo variants will be generated based on selected gene panels.
+          </p>
+          
+          <div
+            onDragEnter={handleDrag}
+            onDragLeave={handleDrag}
+            onDragOver={handleDrag}
+            onDrop={handleDrop}
+            className={cn(
+              'relative rounded-lg border-2 border-dashed p-8 text-center transition-colors',
+              dragActive && 'border-accent bg-accent/5',
+              formData.vcfFile && 'border-benign bg-benign/5',
+              !dragActive && !formData.vcfFile && 'border-border hover:border-muted-foreground'
+            )}
+          >
+            {formData.vcfFile ? (
+              <div className="flex items-center justify-center gap-4">
+                <div className="flex items-center gap-2 text-benign">
+                  <Check className="h-5 w-5" />
+                  <span className="font-medium">{formData.vcfFile.name}</span>
+                </div>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => setFormData(prev => ({ ...prev, vcfFile: null }))}
+                >
+                  <X className="h-4 w-4" />
+                </Button>
+              </div>
+            ) : (
+              <>
+                <Upload className="mx-auto h-8 w-8 text-muted-foreground" />
+                <p className="mt-4 text-sm font-medium text-foreground">
+                  Drag and drop your VCF file here
+                </p>
+                <p className="mt-1 text-xs text-muted-foreground">
+                  or click to browse (.vcf, .vcf.gz)
+                </p>
+                <input
+                  type="file"
+                  accept=".vcf,.vcf.gz"
+                  onChange={(e) => handleFileChange(e)}
+                  className="absolute inset-0 cursor-pointer opacity-0"
+                />
+              </>
+            )}
+          </div>
+        </Card>
+      )}
 
       <Card className="border-border/50 p-6">
         <h2 className="mb-6 text-lg font-semibold text-foreground">Priority</h2>
@@ -343,10 +502,10 @@ export function NewCaseForm() {
           {isSubmitting ? (
             <>
               <Loader2 className="h-4 w-4 animate-spin" />
-              Starting Pipeline...
+              {trioMode ? 'Starting Trio Pipeline...' : 'Starting Pipeline...'}
             </>
           ) : (
-            'Start Analysis'
+            trioMode ? 'Start Trio Analysis' : 'Start Analysis'
           )}
         </Button>
       </div>

@@ -4,7 +4,9 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { VariantsTable } from '@/components/variants-table';
 import { ClinicalNarrative } from '@/components/clinical-narrative';
 import { Card } from '@/components/ui/card';
-import { FileText, Dna, BookOpen, Database, Loader2 } from 'lucide-react';
+import { FileText, Dna, BookOpen, Database, Loader2, Clock, Heart } from 'lucide-react';
+import { AISummaryStreaming } from '@/components/streaming-narrative';
+import { CaseHistoryTimeline, calculateVariantDelta, LongitudinalDelta } from '@/components/longitudinal-delta';
 
 interface Variant {
   id: string;
@@ -41,7 +43,14 @@ interface PipelineStep {
   name: string;
   status: string;
   duration?: string;
-  output?: Record<string, any>;
+  output?: Record<string, unknown>;
+}
+
+interface CaseHistoryEntry {
+  caseId: string;
+  date: string;
+  pathogenicCount: number;
+  totalVariants: number;
 }
 
 interface CaseData {
@@ -60,10 +69,25 @@ interface CaseData {
 
 interface CaseReviewPanelProps {
   caseData: CaseData;
+  priorVariants?: { gene: string; hgvs_c: string; classification: string }[];
+  caseHistory?: CaseHistoryEntry[];
+  hasPriorCases?: boolean;
 }
 
-export function CaseReviewPanel({ caseData }: CaseReviewPanelProps) {
+export function CaseReviewPanel({ caseData, priorVariants = [], caseHistory = [], hasPriorCases = false }: CaseReviewPanelProps) {
   const isLoading = caseData.rawStatus === 'in_progress' || caseData.rawStatus === 'pending';
+  const isGeneratingSummary = isLoading && caseData.pipelineSteps.find(s => s.name === 'Report Generation')?.status === 'running';
+
+  // Calculate deltas for variants
+  const variantsWithDeltas = caseData.variants.map(v => {
+    const delta = priorVariants.length > 0 
+      ? calculateVariantDelta(
+          { gene: v.gene, hgvs_c: v.hgvsC, classification: v.classification },
+          priorVariants
+        )
+      : null;
+    return { ...v, delta };
+  });
 
   return (
     <Tabs defaultValue="variants" className="w-full">
@@ -76,6 +100,16 @@ export function CaseReviewPanel({ caseData }: CaseReviewPanelProps) {
           <FileText className="h-4 w-4" />
           AI Summary
         </TabsTrigger>
+        <TabsTrigger value="patient-letter" className="gap-2">
+          <Heart className="h-4 w-4" />
+          Patient Letter
+        </TabsTrigger>
+        {hasPriorCases && (
+          <TabsTrigger value="history" className="gap-2">
+            <Clock className="h-4 w-4" />
+            History
+          </TabsTrigger>
+        )}
         <TabsTrigger value="evidence" className="gap-2">
           <BookOpen className="h-4 w-4" />
           Evidence
@@ -88,7 +122,7 @@ export function CaseReviewPanel({ caseData }: CaseReviewPanelProps) {
 
       <TabsContent value="variants" className="mt-0">
         {caseData.variants.length > 0 ? (
-          <VariantsTable variants={caseData.variants} />
+          <VariantsTable variants={variantsWithDeltas} showDelta={hasPriorCases} />
         ) : isLoading ? (
           <Card className="border-border/50 p-6">
             <div className="flex flex-col items-center justify-center py-8 text-center">
@@ -117,7 +151,11 @@ export function CaseReviewPanel({ caseData }: CaseReviewPanelProps) {
       <TabsContent value="summary" className="mt-0">
         {caseData.aiSummary ? (
           <Card className="border-border/50 p-6">
-            <ClinicalNarrative summary={caseData.aiSummary} />
+            {isGeneratingSummary ? (
+              <AISummaryStreaming summary={caseData.aiSummary} isGenerating={true} />
+            ) : (
+              <ClinicalNarrative summary={caseData.aiSummary} />
+            )}
           </Card>
         ) : isLoading ? (
           <Card className="border-border/50 p-6">
@@ -144,6 +182,62 @@ export function CaseReviewPanel({ caseData }: CaseReviewPanelProps) {
         )}
       </TabsContent>
 
+      <TabsContent value="patient-letter" className="mt-0">
+        <Card className="border-border/50 p-6">
+          {caseData.rawStatus === 'completed' || caseData.rawStatus === 'awaiting_review' ? (
+            <div className="prose prose-sm max-w-none">
+              <div className="rounded-lg border border-border bg-muted/20 p-6">
+                <h3 className="mb-4 text-sm font-semibold text-foreground flex items-center gap-2">
+                  <Heart className="h-4 w-4 text-pathogenic" />
+                  Patient-Friendly Letter
+                </h3>
+                <div className="whitespace-pre-wrap text-sm text-foreground leading-relaxed">
+                  {/* This would be populated from the generatePatientLetter step */}
+                  <p className="mb-4">Dear {caseData.patientName.split(' ')[0]},</p>
+                  <p className="mb-4">
+                    We have completed your genetic testing and wanted to share the results with you in a way that is easy to understand.
+                  </p>
+                  <p className="mb-4">
+                    {caseData.variants.filter(v => v.classification === 'pathogenic' || v.classification === 'likely_pathogenic').length > 0
+                      ? `Our analysis found some genetic changes that are important for your health care. Specifically, we identified changes in the ${[...new Set(caseData.variants.filter(v => v.classification === 'pathogenic' || v.classification === 'likely_pathogenic').map(v => v.gene))].join(' and ')} gene(s) that may be related to your health history.`
+                      : `Good news - we did not find any concerning genetic changes in the genes we tested. This is reassuring, though it's important to continue following your doctor's recommendations for regular health screenings.`
+                    }
+                  </p>
+                  <p className="mb-4">
+                    Your medical team will discuss these findings with you in detail and explain what they mean for you and your family. They may recommend additional testing or screening based on these results.
+                  </p>
+                  <p className="mb-4">
+                    Please don&apos;t hesitate to contact our office with any questions.
+                  </p>
+                  <p>
+                    Warm regards,<br />
+                    Your Genetics Team
+                  </p>
+                </div>
+              </div>
+            </div>
+          ) : (
+            <div className="flex flex-col items-center justify-center py-8 text-center">
+              <div className="mb-4 rounded-full bg-muted p-3">
+                <Heart className="h-6 w-6 text-muted-foreground" />
+              </div>
+              <p className="text-sm font-medium text-foreground">Patient Letter Pending</p>
+              <p className="mt-1 text-sm text-muted-foreground">
+                The patient-friendly letter will be generated after the clinical report is complete.
+              </p>
+            </div>
+          )}
+        </Card>
+      </TabsContent>
+
+      {hasPriorCases && (
+        <TabsContent value="history" className="mt-0">
+          <Card className="border-border/50 p-6">
+            <CaseHistoryTimeline history={caseHistory} currentCaseId={caseData.id} />
+          </Card>
+        </TabsContent>
+      )}
+
       <TabsContent value="evidence" className="mt-0">
         <Card className="border-border/50 p-6">
           <div className="space-y-6">
@@ -158,7 +252,7 @@ export function CaseReviewPanel({ caseData }: CaseReviewPanelProps) {
                       </code>
                       <span className="text-muted-foreground">·</span>
                       <code className="font-mono text-xs text-muted-foreground">
-                        chr{variant.chromosome}:{variant.position}
+                        {variant.chromosome.startsWith('chr') ? variant.chromosome : `chr${variant.chromosome}`}:{variant.position}
                       </code>
                     </div>
                     <div className="grid gap-3 text-sm">
@@ -223,7 +317,7 @@ export function CaseReviewPanel({ caseData }: CaseReviewPanelProps) {
   })),
   variants: caseData.variants.map(v => ({
     id: v.id,
-    coordinates: `chr${v.chromosome}:${v.position}`,
+    coordinates: `${v.chromosome.startsWith('chr') ? v.chromosome : `chr${v.chromosome}`}:${v.position}`,
     gene: v.gene,
     hgvsC: v.hgvsC,
     hgvsP: v.hgvsP,

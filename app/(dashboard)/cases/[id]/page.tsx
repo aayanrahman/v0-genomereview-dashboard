@@ -6,6 +6,7 @@ import { PipelineProgress } from '@/components/pipeline-progress';
 import { StatusBadge } from '@/components/status-badge';
 import { CaseReviewPanel } from '@/components/case-review-panel';
 import { CaseActions } from '@/components/case-actions';
+import { CrashDemoWrapper } from '@/components/crash-demo-wrapper';
 import { ArrowLeft, User, Calendar, Stethoscope, FileText } from 'lucide-react';
 import { CasePolling } from '@/components/case-polling';
 
@@ -49,6 +50,42 @@ async function getCaseData(id: string) {
     .order('generated_at', { ascending: false })
     .limit(1)
     .single();
+  
+  // Fetch prior cases for longitudinal delta (Feature 5)
+  const { data: priorCases } = await supabase
+    .from('cases')
+    .select('id, created_at, mrn')
+    .eq('mrn', caseData.mrn)
+    .eq('status', 'completed')
+    .neq('id', id)
+    .order('created_at', { ascending: false })
+    .limit(5);
+
+  // Fetch prior variants if there are prior cases
+  let priorVariants: { gene: string; hgvs_c: string; classification: string }[] = [];
+  if (priorCases && priorCases.length > 0) {
+    const { data: priorVars } = await supabase
+      .from('variants')
+      .select('gene, hgvs_c, classification')
+      .eq('case_id', priorCases[0].id);
+    priorVariants = priorVars || [];
+  }
+
+  // Build case history for timeline
+  const caseHistory = [
+    ...(priorCases || []).map(pc => ({
+      caseId: pc.id,
+      date: new Date(pc.created_at).toLocaleDateString(),
+      pathogenicCount: 0, // Would need to fetch per case
+      totalVariants: 0,
+    })),
+    {
+      caseId: caseData.id,
+      date: new Date(caseData.created_at).toLocaleDateString(),
+      pathogenicCount: variants?.filter(v => v.classification === 'pathogenic' || v.classification === 'likely_pathogenic').length || 0,
+      totalVariants: variants?.length || 0,
+    }
+  ];
   
   return {
     id: caseData.id,
@@ -102,6 +139,9 @@ async function getCaseData(id: string) {
       reviewedBy: aiSummary.reviewed_by,
       reviewedAt: aiSummary.reviewed_at,
     } : null,
+    priorVariants,
+    caseHistory,
+    hasPriorCases: (priorCases?.length || 0) > 0,
   };
 }
 
@@ -137,6 +177,7 @@ export default async function CaseDetailPage({ params }: PageProps) {
   }
 
   const isInProgress = caseData.rawStatus === 'in_progress' || caseData.rawStatus === 'pending';
+  const currentStepIndex = caseData.pipelineSteps.findIndex(s => s.status === 'running');
 
   return (
     <div className="pb-24">
@@ -144,13 +185,23 @@ export default async function CaseDetailPage({ params }: PageProps) {
       {isInProgress && <CasePolling caseId={id} />}
       
       <header className="border-b border-border/50 bg-card px-8 py-6">
-        <Link 
-          href="/" 
-          className="mb-4 inline-flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground transition-colors"
-        >
-          <ArrowLeft className="h-4 w-4" />
-          Back to Dashboard
-        </Link>
+        <div className="flex items-center justify-between mb-4">
+          <Link 
+            href="/" 
+            className="inline-flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground transition-colors"
+          >
+            <ArrowLeft className="h-4 w-4" />
+            Back to Dashboard
+          </Link>
+          
+          {/* Crash Demo Button (Feature 2) - only show when pipeline is running */}
+          {isInProgress && (
+            <CrashDemoWrapper 
+              currentStepIndex={currentStepIndex}
+              steps={caseData.pipelineSteps}
+            />
+          )}
+        </div>
         
         <div className="flex items-start justify-between">
           <div>
@@ -251,7 +302,12 @@ export default async function CaseDetailPage({ params }: PageProps) {
         </aside>
 
         <div className="flex-1 min-w-0">
-          <CaseReviewPanel caseData={caseData} />
+          <CaseReviewPanel 
+            caseData={caseData} 
+            priorVariants={caseData.priorVariants}
+            caseHistory={caseData.caseHistory}
+            hasPriorCases={caseData.hasPriorCases}
+          />
         </div>
       </div>
 
