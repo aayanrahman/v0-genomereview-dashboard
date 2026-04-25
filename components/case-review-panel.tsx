@@ -191,25 +191,136 @@ export function CaseReviewPanel({ caseData, priorVariants = [], caseHistory = []
                   <Heart className="h-4 w-4 text-pathogenic" />
                   Patient-Friendly Letter
                 </h3>
-                <div className="whitespace-pre-wrap text-sm text-foreground leading-relaxed">
-                  {/* This would be populated from the generatePatientLetter step */}
-                  <p className="mb-4">Dear {caseData.patientName.split(' ')[0]},</p>
-                  <p className="mb-4">
+                <div className="whitespace-pre-wrap text-sm text-foreground leading-relaxed space-y-4">
+                  <p>Dear {caseData.patientName.split(' ')[0]},</p>
+                  
+                  <p>
                     We have completed your genetic testing and wanted to share the results with you in a way that is easy to understand.
                   </p>
-                  <p className="mb-4">
-                    {caseData.variants.filter(v => v.classification === 'pathogenic' || v.classification === 'likely_pathogenic').length > 0
-                      ? `Our analysis found some genetic changes that are important for your health care. Specifically, we identified changes in the ${[...new Set(caseData.variants.filter(v => v.classification === 'pathogenic' || v.classification === 'likely_pathogenic').map(v => v.gene))].join(' and ')} gene(s) that may be related to your health history.`
-                      : `Good news - we did not find any concerning genetic changes in the genes we tested. This is reassuring, though it's important to continue following your doctor's recommendations for regular health screenings.`
+                  
+                  {(() => {
+                    const pathogenicVariants = caseData.variants.filter(v => 
+                      v.classification === 'pathogenic' || v.classification === 'likely_pathogenic'
+                    );
+                    
+                    if (pathogenicVariants.length === 0) {
+                      return (
+                        <p>
+                          <strong>Good news</strong> — we did not find any concerning genetic changes in the genes we tested. 
+                          This is reassuring, though it&apos;s important to continue following your doctor&apos;s recommendations 
+                          for regular health screenings.
+                        </p>
+                      );
                     }
-                  </p>
-                  <p className="mb-4">
-                    Your medical team will discuss these findings with you in detail and explain what they mean for you and your family. They may recommend additional testing or screening based on these results.
-                  </p>
-                  <p className="mb-4">
-                    Please don&apos;t hesitate to contact our office with any questions.
-                  </p>
+                    
+                    // Gene-specific explanations
+                    const geneExplanations: Record<string, { role: string; risk: string }> = {
+                      'BRCA1': {
+                        role: 'BRCA1 is a gene that normally helps prevent breast and ovarian cancer by repairing damaged DNA',
+                        risk: 'this change means that protection may not be working as well as it should, which increases your lifetime risk for breast cancer (up to 70%) and ovarian cancer (up to 44%)'
+                      },
+                      'BRCA2': {
+                        role: 'BRCA2 works alongside BRCA1 to repair DNA and prevent cancer development',
+                        risk: 'this change increases your risk for breast cancer, ovarian cancer, and also pancreatic and prostate cancers'
+                      },
+                      'TP53': {
+                        role: 'TP53 is sometimes called the "guardian of the genome" because it helps prevent cells from becoming cancerous',
+                        risk: 'changes in this gene are associated with Li-Fraumeni syndrome, which increases risk for several types of cancer starting at a young age'
+                      },
+                      'PALB2': {
+                        role: 'PALB2 works with BRCA2 to repair DNA damage',
+                        risk: 'this change moderately increases your risk for breast cancer and may also increase risk for pancreatic and ovarian cancers'
+                      },
+                      'ATM': {
+                        role: 'ATM helps cells respond to DNA damage',
+                        risk: 'this change moderately increases your lifetime risk for breast cancer'
+                      },
+                      'CHEK2': {
+                        role: 'CHEK2 helps control cell division and DNA repair',
+                        risk: 'this change moderately increases your risk for breast cancer and possibly colon cancer'
+                      },
+                      'MLH1': {
+                        role: 'MLH1 helps fix errors that occur when DNA is copied',
+                        risk: 'changes in this gene are associated with Lynch syndrome, which significantly increases risk for colorectal and uterine cancers'
+                      },
+                      'MSH2': {
+                        role: 'MSH2 works with MLH1 to repair DNA copying errors',
+                        risk: 'this change is associated with Lynch syndrome and increased cancer risks, particularly colorectal and uterine cancers'
+                      },
+                      'MUTYH': {
+                        role: 'MUTYH repairs a specific type of DNA damage caused by oxidation',
+                        risk: 'depending on whether one or both copies are affected, this can increase your risk for colorectal polyps and cancer'
+                      }
+                    };
+                    
+                    const uniqueGenes = [...new Set(pathogenicVariants.map(v => v.gene))];
+                    
+                    return (
+                      <>
+                        <p>
+                          <strong>Our analysis found some genetic changes that are important for your health care.</strong> 
+                          {' '}We want to explain each finding and what it means for you:
+                        </p>
+                        
+                        {uniqueGenes.map(gene => {
+                          const explanation = geneExplanations[gene];
+                          if (explanation) {
+                            return (
+                              <div key={gene} className="rounded-md bg-pathogenic/5 border-l-2 border-pathogenic/30 p-3 my-3">
+                                <p className="font-medium text-foreground mb-1">{gene} Gene Change</p>
+                                <p>
+                                  We found a change in your <strong>{gene}</strong> gene. {explanation.role} — {explanation.risk}.
+                                </p>
+                              </div>
+                            );
+                          }
+                          return (
+                            <div key={gene} className="rounded-md bg-pathogenic/5 border-l-2 border-pathogenic/30 p-3 my-3">
+                              <p className="font-medium text-foreground mb-1">{gene} Gene Change</p>
+                              <p>
+                                We found a change in your <strong>{gene}</strong> gene that may affect how this gene normally works. 
+                                Your healthcare team will explain the specific implications for your health.
+                              </p>
+                            </div>
+                          );
+                        })}
+                        
+                        <div className="rounded-md bg-benign/5 border border-benign/30 p-4 mt-4">
+                          <p className="font-medium text-foreground mb-2">What Should You Do Next?</p>
+                          <ul className="list-disc list-inside space-y-2 text-sm">
+                            <li>
+                              <strong>Schedule a genetic counseling appointment.</strong> A genetic counselor can explain 
+                              these results in detail and answer any questions you have.
+                            </li>
+                            <li>
+                              <strong>Consider family testing.</strong> Your close relatives (parents, siblings, children) 
+                              may want to be tested for these same genetic changes.
+                            </li>
+                            <li>
+                              <strong>Discuss screening schedules with your doctor.</strong> Based on these findings, 
+                              you may benefit from earlier or more frequent cancer screenings.
+                            </li>
+                            <li>
+                              <strong>Ask about risk-reduction options.</strong> There are medical and surgical options 
+                              that can help reduce cancer risk for people with certain genetic changes.
+                            </li>
+                          </ul>
+                        </div>
+                      </>
+                    );
+                  })()}
+                  
                   <p>
+                    We understand that receiving genetic test results can bring up many emotions and questions. 
+                    Please know that our team is here to support you every step of the way.
+                  </p>
+                  
+                  <p>
+                    Please don&apos;t hesitate to contact our office with any questions. We recommend scheduling a 
+                    follow-up appointment to discuss these results and your options.
+                  </p>
+                  
+                  <p className="pt-4">
                     Warm regards,<br />
                     Your Genetics Team
                   </p>

@@ -1,4 +1,5 @@
 import { AppSidebar } from '@/components/app-sidebar';
+import { CrashProvider } from '@/components/crash-context';
 
 export default function DashboardLayout({
   children,
@@ -6,11 +7,13 @@ export default function DashboardLayout({
   children: React.ReactNode;
 }) {
   return (
-    <div className="min-h-screen bg-background">
-      <AppSidebar />
-      <main className="ml-64 min-h-screen">
-        {children}
-      </main>
-    </div>
+    <CrashProvider>
+      <div className="min-h-screen bg-background">
+        <AppSidebar />
+        <main className="ml-64 min-h-screen">
+          {children}
+        </main>
+      </div>
+    </CrashProvider>
   );
 }

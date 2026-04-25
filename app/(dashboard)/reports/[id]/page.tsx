@@ -60,6 +60,7 @@ export default async function ReportPage({ params }: PageProps) {
                 variantCount: variants.length,
                 pathogenicCount,
                 genePanel: caseData.gene_panel?.join(', ') || 'Comprehensive Cancer Panel',
+                genePanelArray: caseData.gene_panel || ['BRCA1', 'BRCA2', 'TP53'],
                 workflowId: caseData.workflow_id || 'wf_demo123',
                 pipelineTimeMs,
               }}

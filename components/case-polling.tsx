@@ -1,7 +1,8 @@
 'use client';
 
-import { useEffect } from 'react';
+import { useEffect, useRef } from 'react';
 import { useRouter } from 'next/navigation';
+import { useCrashContext } from './crash-context';
 
 interface CasePollingProps {
   caseId: string;
@@ -10,15 +11,30 @@ interface CasePollingProps {
 
 export function CasePolling({ caseId, intervalMs = 3000 }: CasePollingProps) {
   const router = useRouter();
+  const { isCrashed } = useCrashContext();
+  const intervalRef = useRef<NodeJS.Timeout | null>(null);
 
   useEffect(() => {
-    const interval = setInterval(() => {
-      // Refresh the page to get latest data
-      router.refresh();
-    }, intervalMs);
+    // Clear any existing interval
+    if (intervalRef.current) {
+      clearInterval(intervalRef.current);
+      intervalRef.current = null;
+    }
 
-    return () => clearInterval(interval);
-  }, [caseId, intervalMs, router]);
+    // Only poll if not crashed
+    if (!isCrashed) {
+      intervalRef.current = setInterval(() => {
+        router.refresh();
+      }, intervalMs);
+    }
+
+    return () => {
+      if (intervalRef.current) {
+        clearInterval(intervalRef.current);
+        intervalRef.current = null;
+      }
+    };
+  }, [caseId, intervalMs, router, isCrashed]);
 
   return null; // This component has no UI, just handles polling
 }

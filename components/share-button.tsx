@@ -9,6 +9,7 @@ interface ShareButtonProps {
     variantCount: number;
     pathogenicCount: number;
     genePanel: string;
+    genePanelArray: string[];
     workflowId: string;
     pipelineTimeMs: number;
   };
