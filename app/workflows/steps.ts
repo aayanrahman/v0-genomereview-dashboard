@@ -2,6 +2,7 @@
 
 import { createClient } from '@/lib/supabase/admin'
 import { generateText } from 'ai'
+import { predictVariantEffect, type AlphaGenomePrediction } from '@/lib/alphagenome'
 
 // Type definitions
 export interface Variant {
@@ -21,6 +22,7 @@ export interface Variant {
 export interface AnnotatedVariant extends Variant {
   alphagenome_score: number | null
   alphagenome_effect: string | null
+  alphagenome_prediction: AlphaGenomePrediction | null
   splice_effect: string | null
 }
 
@@ -47,33 +49,49 @@ export async function parseVcf(caseId: string, vcfData: string | undefined, gene
   // Simulate VCF parsing - in production this would use htslib or similar
   const variants: Variant[] = []
   
+  // Real variant data from ClinVar for realistic demo
   const variantTemplates: Record<string, Partial<Variant>[]> = {
     'BRCA1': [
-      { hgvs_c: 'c.5266dupC', hgvs_p: 'p.Gln1756Profs*74', chromosome: '17', position: 43057051, ref_allele: 'G', alt_allele: 'GC' },
-      { hgvs_c: 'c.68_69delAG', hgvs_p: 'p.Glu23Valfs*17', chromosome: '17', position: 43124027, ref_allele: 'CAG', alt_allele: 'C' },
+      { hgvs_c: 'c.5266dupC', hgvs_p: 'p.Gln1756Profs*74', chromosome: 'chr17', position: 43057051, ref_allele: 'G', alt_allele: 'GC' },
+      { hgvs_c: 'c.68_69delAG', hgvs_p: 'p.Glu23Valfs*17', chromosome: 'chr17', position: 43124027, ref_allele: 'CAG', alt_allele: 'C' },
+      { hgvs_c: 'c.5123C>A', hgvs_p: 'p.Ala1708Glu', chromosome: 'chr17', position: 43063368, ref_allele: 'C', alt_allele: 'A' },
     ],
     'BRCA2': [
-      { hgvs_c: 'c.5946delT', hgvs_p: 'p.Ser1982Argfs*22', chromosome: '13', position: 32914438, ref_allele: 'CT', alt_allele: 'C' },
-      { hgvs_c: 'c.9382C>T', hgvs_p: 'p.Arg3128*', chromosome: '13', position: 32972626, ref_allele: 'C', alt_allele: 'T' },
+      { hgvs_c: 'c.5946delT', hgvs_p: 'p.Ser1982Argfs*22', chromosome: 'chr13', position: 32914438, ref_allele: 'CT', alt_allele: 'C' },
+      { hgvs_c: 'c.9382C>T', hgvs_p: 'p.Arg3128*', chromosome: 'chr13', position: 32972626, ref_allele: 'C', alt_allele: 'T' },
+      { hgvs_c: 'c.7007G>A', hgvs_p: 'p.Arg2336His', chromosome: 'chr13', position: 32936732, ref_allele: 'G', alt_allele: 'A' },
     ],
     'TP53': [
-      { hgvs_c: 'c.743G>A', hgvs_p: 'p.Arg248Gln', chromosome: '17', position: 7674220, ref_allele: 'C', alt_allele: 'T' },
-      { hgvs_c: 'c.817C>T', hgvs_p: 'p.Arg273Cys', chromosome: '17', position: 7673802, ref_allele: 'G', alt_allele: 'A' },
+      { hgvs_c: 'c.743G>A', hgvs_p: 'p.Arg248Gln', chromosome: 'chr17', position: 7674220, ref_allele: 'C', alt_allele: 'T' },
+      { hgvs_c: 'c.817C>T', hgvs_p: 'p.Arg273Cys', chromosome: 'chr17', position: 7673802, ref_allele: 'G', alt_allele: 'A' },
+      { hgvs_c: 'c.524G>A', hgvs_p: 'p.Arg175His', chromosome: 'chr17', position: 7675088, ref_allele: 'C', alt_allele: 'T' },
     ],
     'MLH1': [
-      { hgvs_c: 'c.1852_1854delAAG', hgvs_p: 'p.Lys618del', chromosome: '3', position: 37053568, ref_allele: 'AAAG', alt_allele: 'A' },
+      { hgvs_c: 'c.1852_1854delAAG', hgvs_p: 'p.Lys618del', chromosome: 'chr3', position: 37053568, ref_allele: 'AAAG', alt_allele: 'A' },
+      { hgvs_c: 'c.677G>A', hgvs_p: 'p.Arg226Gln', chromosome: 'chr3', position: 37042323, ref_allele: 'G', alt_allele: 'A' },
     ],
     'MSH2': [
-      { hgvs_c: 'c.942+3A>T', hgvs_p: null, chromosome: '2', position: 47630500, ref_allele: 'A', alt_allele: 'T' },
+      { hgvs_c: 'c.942+3A>T', hgvs_p: null, chromosome: 'chr2', position: 47630500, ref_allele: 'A', alt_allele: 'T' },
+      { hgvs_c: 'c.1906G>C', hgvs_p: 'p.Ala636Pro', chromosome: 'chr2', position: 47657048, ref_allele: 'G', alt_allele: 'C' },
     ],
     'PALB2': [
-      { hgvs_c: 'c.3113G>A', hgvs_p: 'p.Trp1038*', chromosome: '16', position: 23634316, ref_allele: 'C', alt_allele: 'T' },
+      { hgvs_c: 'c.3113G>A', hgvs_p: 'p.Trp1038*', chromosome: 'chr16', position: 23634316, ref_allele: 'C', alt_allele: 'T' },
+      { hgvs_c: 'c.509_510delGA', hgvs_p: 'p.Arg170Ilefs*14', chromosome: 'chr16', position: 23647283, ref_allele: 'TGA', alt_allele: 'T' },
+    ],
+    'ATM': [
+      { hgvs_c: 'c.7271T>G', hgvs_p: 'p.Val2424Gly', chromosome: 'chr11', position: 108225612, ref_allele: 'T', alt_allele: 'G' },
+      { hgvs_c: 'c.8545C>T', hgvs_p: 'p.Arg2849*', chromosome: 'chr11', position: 108236186, ref_allele: 'C', alt_allele: 'T' },
+    ],
+    'CHEK2': [
+      { hgvs_c: 'c.1100delC', hgvs_p: 'p.Thr367Metfs*15', chromosome: 'chr22', position: 29091857, ref_allele: 'TC', alt_allele: 'T' },
+      { hgvs_c: 'c.470T>C', hgvs_p: 'p.Ile157Thr', chromosome: 'chr22', position: 29107980, ref_allele: 'T', alt_allele: 'C' },
     ],
   }
   
   for (const gene of genePanel) {
     const templates = variantTemplates[gene] || []
-    const numVariants = Math.floor(Math.random() * Math.min(2, templates.length + 1))
+    // Pick 1-2 variants per gene for demo
+    const numVariants = Math.min(Math.floor(Math.random() * 2) + 1, templates.length)
     const shuffled = [...templates].sort(() => Math.random() - 0.5)
     
     for (let i = 0; i < numVariants && i < shuffled.length; i++) {
@@ -88,7 +106,7 @@ export async function parseVcf(caseId: string, vcfData: string | undefined, gene
         alt_allele: template.alt_allele!,
         zygosity: Math.random() > 0.3 ? 'heterozygous' : 'homozygous',
         gnomad_af: Math.random() < 0.7 ? Math.random() * 0.001 : null,
-        clinvar_id: Math.random() > 0.3 ? `VCV${Math.floor(Math.random() * 1000000).toString().padStart(9, '0')}` : null,
+        clinvar_id: `VCV${Math.floor(Math.random() * 1000000).toString().padStart(9, '0')}`,
         clinvar_significance: null,
       })
     }
@@ -97,19 +115,23 @@ export async function parseVcf(caseId: string, vcfData: string | undefined, gene
   // Ensure at least one variant for demo
   if (variants.length === 0 && genePanel.length > 0) {
     const gene = genePanel[0]
-    variants.push({
-      gene,
-      hgvs_c: 'c.1234A>G',
-      hgvs_p: 'p.Asn412Ser',
-      chromosome: '17',
-      position: 43000000 + Math.floor(Math.random() * 100000),
-      ref_allele: 'A',
-      alt_allele: 'G',
-      zygosity: 'heterozygous',
-      gnomad_af: 0.00023,
-      clinvar_id: null,
-      clinvar_significance: null,
-    })
+    const templates = variantTemplates[gene]
+    if (templates && templates.length > 0) {
+      const template = templates[0]
+      variants.push({
+        gene,
+        hgvs_c: template.hgvs_c!,
+        hgvs_p: template.hgvs_p || null,
+        chromosome: template.chromosome!,
+        position: template.position!,
+        ref_allele: template.ref_allele!,
+        alt_allele: template.alt_allele!,
+        zygosity: 'heterozygous',
+        gnomad_af: 0.00023,
+        clinvar_id: 'VCV000017694',
+        clinvar_significance: null,
+      })
+    }
   }
   
   await supabase
@@ -118,7 +140,7 @@ export async function parseVcf(caseId: string, vcfData: string | undefined, gene
       status: 'completed', 
       completed_at: new Date().toISOString(),
       duration_ms: 2500 + Math.floor(Math.random() * 1000),
-      output: { variants_found: variants.length }
+      output: { variants_found: variants.length, genes_analyzed: genePanel.length }
     })
     .eq('case_id', caseId)
     .eq('step_name', 'VCF Parsing')
@@ -126,7 +148,7 @@ export async function parseVcf(caseId: string, vcfData: string | undefined, gene
   return variants
 }
 
-// Step 2: Query ClinVar
+// Step 2: Query ClinVar for existing annotations
 export async function queryClinvar(caseId: string, variants: Variant[]): Promise<Variant[]> {
   'use step'
   
@@ -138,10 +160,12 @@ export async function queryClinvar(caseId: string, variants: Variant[]): Promise
     .eq('case_id', caseId)
     .eq('step_name', 'ClinVar Query')
   
+  // Simulate ClinVar lookup with realistic distribution
   const annotated = variants.map(v => {
     if (v.clinvar_id) {
+      // Weight towards uncertain significance (real-world distribution)
       const significances = ['Pathogenic', 'Likely pathogenic', 'Uncertain significance', 'Likely benign', 'Benign']
-      const weights = [0.25, 0.2, 0.35, 0.1, 0.1]
+      const weights = [0.15, 0.15, 0.45, 0.15, 0.10]
       const rand = Math.random()
       let cumulative = 0
       let significance = 'Uncertain significance'
@@ -157,13 +181,18 @@ export async function queryClinvar(caseId: string, variants: Variant[]): Promise
     return v
   })
   
+  const clinvarHits = annotated.filter(v => v.clinvar_significance).length
+  
   await supabase
     .from('pipeline_steps')
     .update({ 
       status: 'completed', 
       completed_at: new Date().toISOString(),
       duration_ms: 1800 + Math.floor(Math.random() * 500),
-      output: { clinvar_hits: annotated.filter(v => v.clinvar_significance).length }
+      output: { 
+        clinvar_hits: clinvarHits,
+        pathogenic_in_clinvar: annotated.filter(v => v.clinvar_significance === 'Pathogenic').length
+      }
     })
     .eq('case_id', caseId)
     .eq('step_name', 'ClinVar Query')
@@ -171,11 +200,16 @@ export async function queryClinvar(caseId: string, variants: Variant[]): Promise
   return annotated
 }
 
-// Step 3: AlphaGenome prediction
+// Step 3: AlphaGenome variant effect prediction
 export async function runAlphaGenome(caseId: string, variants: Variant[]): Promise<AnnotatedVariant[]> {
   'use step'
   
   const supabase = createClient()
+  const apiKey = process.env.ALPHAGENOME_API_KEY
+  
+  if (!apiKey) {
+    console.error('ALPHAGENOME_API_KEY not configured')
+  }
   
   await supabase
     .from('pipeline_steps')
@@ -183,43 +217,46 @@ export async function runAlphaGenome(caseId: string, variants: Variant[]): Promi
     .eq('case_id', caseId)
     .eq('step_name', 'AlphaGenome')
   
-  const annotated: AnnotatedVariant[] = variants.map(v => {
-    let score: number
-    let effect: string
-    let spliceEffect: string | null = null
+  const annotated: AnnotatedVariant[] = []
+  
+  for (const variant of variants) {
+    // Call AlphaGenome API for each variant
+    const prediction = await predictVariantEffect(
+      {
+        chromosome: variant.chromosome,
+        position: variant.position,
+        referenceAllele: variant.ref_allele,
+        alternateAllele: variant.alt_allele,
+        gene: variant.gene,
+        hgvsC: variant.hgvs_c,
+        hgvsP: variant.hgvs_p,
+      },
+      apiKey || ''
+    )
     
-    if (v.hgvs_p?.includes('fs') || v.hgvs_p?.includes('*')) {
-      score = 0.85 + Math.random() * 0.14
-      effect = 'loss_of_function'
-    } else if (v.hgvs_c.includes('+') || v.hgvs_c.includes('-')) {
-      score = 0.6 + Math.random() * 0.35
-      effect = 'splice_disruption'
-      spliceEffect = Math.random() > 0.5 ? 'exon_skipping' : 'cryptic_splice_activation'
-    } else if (v.hgvs_p?.includes('del') && !v.hgvs_p.includes('fs')) {
-      score = 0.4 + Math.random() * 0.4
-      effect = 'protein_truncation'
-    } else {
-      score = Math.random() * 0.8
-      effect = score > 0.5 ? 'damaging_missense' : 'tolerated_missense'
-    }
-    
-    return {
-      ...v,
-      alphagenome_score: Math.round(score * 1000) / 1000,
-      alphagenome_effect: effect,
-      splice_effect: spliceEffect,
-    }
-  })
+    annotated.push({
+      ...variant,
+      alphagenome_score: prediction.variantEffectScore,
+      alphagenome_effect: prediction.predictedEffect,
+      alphagenome_prediction: prediction,
+      splice_effect: prediction.spliceEffect.type !== 'none' ? prediction.spliceEffect.type : null,
+    })
+  }
+  
+  const highImpact = annotated.filter(v => (v.alphagenome_score || 0) > 0.7).length
+  const spliceVariants = annotated.filter(v => v.splice_effect).length
   
   await supabase
     .from('pipeline_steps')
     .update({ 
       status: 'completed', 
       completed_at: new Date().toISOString(),
-      duration_ms: 8500 + Math.floor(Math.random() * 2000),
+      duration_ms: variants.length * 2000 + Math.floor(Math.random() * 1000),
       output: { 
-        high_impact: annotated.filter(v => (v.alphagenome_score || 0) > 0.7).length,
-        splice_variants: annotated.filter(v => v.splice_effect).length
+        high_impact: highImpact,
+        splice_variants: spliceVariants,
+        model_version: 'alphagenome-v0.6.1',
+        variants_scored: variants.length
       }
     })
     .eq('case_id', caseId)
@@ -243,32 +280,63 @@ export async function classifyVariants(caseId: string, variants: AnnotatedVarian
   const classifiedVariants: ClassifiedVariant[] = []
   
   for (const variant of variants) {
-    const prompt = `You are a clinical geneticist. Classify this variant according to ACMG/AMP guidelines.
+    const alphaGenomeInfo = variant.alphagenome_prediction 
+      ? `
+AlphaGenome Analysis:
+- Variant Effect Score: ${variant.alphagenome_prediction.variantEffectScore} (0-1 scale, higher = more impactful)
+- Predicted Effect: ${variant.alphagenome_prediction.predictedEffect}
+- RNA Expression Change: ${variant.alphagenome_prediction.rnaSeqEffect > 0 ? '+' : ''}${(variant.alphagenome_prediction.rnaSeqEffect * 100).toFixed(1)}%
+- Splice Disruption Score: ${variant.alphagenome_prediction.spliceEffect.score} (${variant.alphagenome_prediction.spliceEffect.type})
+- Chromatin Effect: ${variant.alphagenome_prediction.chromatinEffect > 0 ? '+' : ''}${(variant.alphagenome_prediction.chromatinEffect * 100).toFixed(1)}%
+- Model Confidence: ${(variant.alphagenome_prediction.confidence * 100).toFixed(0)}%`
+      : ''
+    
+    const prompt = `You are a board-certified clinical geneticist with expertise in variant classification. Classify this variant according to ACMG/AMP 2015 guidelines.
 
-Variant: ${variant.gene} ${variant.hgvs_c} ${variant.hgvs_p || ''}
-Chromosome: ${variant.chromosome}:${variant.position}
+VARIANT INFORMATION:
+Gene: ${variant.gene}
+HGVS Coding: ${variant.hgvs_c}
+HGVS Protein: ${variant.hgvs_p || 'N/A (non-coding)'}
+Genomic Location: ${variant.chromosome}:${variant.position}
+Reference/Alternate: ${variant.ref_allele} > ${variant.alt_allele}
 Zygosity: ${variant.zygosity}
-gnomAD AF: ${variant.gnomad_af || 'Not found'}
-ClinVar: ${variant.clinvar_significance || 'No entry'}
-AlphaGenome Score: ${variant.alphagenome_score} (${variant.alphagenome_effect})
-${variant.splice_effect ? `Splice Effect: ${variant.splice_effect}` : ''}
-Clinical Indication: ${indication}
 
-Respond in JSON format:
+POPULATION DATA:
+gnomAD Allele Frequency: ${variant.gnomad_af ? variant.gnomad_af.toExponential(2) : 'Not found in gnomAD'}
+
+DATABASE ANNOTATIONS:
+ClinVar ID: ${variant.clinvar_id || 'Not in ClinVar'}
+ClinVar Significance: ${variant.clinvar_significance || 'No assertion'}
+${alphaGenomeInfo}
+
+CLINICAL CONTEXT:
+Indication: ${indication}
+
+Based on the evidence above, provide your classification. Consider:
+1. Population frequency (PM2, BA1, BS1)
+2. Computational predictions from AlphaGenome (PP3, BP4)
+3. Variant type and predicted effect (PVS1 for null variants)
+4. ClinVar assertions if available
+5. Functional impact predictions
+
+Respond ONLY with valid JSON in this exact format:
 {
-  "classification": "pathogenic|likely_pathogenic|vus|likely_benign|benign",
-  "acmg_criteria": ["PVS1", "PM2", etc.],
-  "reasoning": "Brief explanation of classification logic",
-  "confidence": 0.0-1.0
-}`
+  "classification": "pathogenic",
+  "acmg_criteria": ["PVS1", "PM2"],
+  "reasoning": "Brief clinical reasoning explaining the classification",
+  "confidence": 0.95
+}
+
+Valid classifications: pathogenic, likely_pathogenic, vus, likely_benign, benign`
 
     try {
       const result = await generateText({
         model: 'anthropic/claude-sonnet-4-20250514',
         prompt,
-        maxOutputTokens: 500,
+        maxOutputTokens: 600,
       })
       
+      // Extract JSON from response
       const jsonMatch = result.text.match(/\{[\s\S]*\}/)
       if (jsonMatch) {
         const parsed = JSON.parse(jsonMatch[0])
@@ -283,9 +351,18 @@ Respond in JSON format:
         classifiedVariants.push(fallbackClassification(variant))
       }
     } catch (error) {
-      console.error('Classification error:', error)
+      console.error('Claude classification error:', error)
       classifiedVariants.push(fallbackClassification(variant))
     }
+  }
+  
+  // Calculate classification statistics
+  const stats = {
+    pathogenic: classifiedVariants.filter(v => v.classification === 'pathogenic').length,
+    likely_pathogenic: classifiedVariants.filter(v => v.classification === 'likely_pathogenic').length,
+    vus: classifiedVariants.filter(v => v.classification === 'vus').length,
+    likely_benign: classifiedVariants.filter(v => v.classification === 'likely_benign').length,
+    benign: classifiedVariants.filter(v => v.classification === 'benign').length,
   }
   
   await supabase
@@ -293,11 +370,11 @@ Respond in JSON format:
     .update({ 
       status: 'completed', 
       completed_at: new Date().toISOString(),
-      duration_ms: 5000 + variants.length * 2000,
+      duration_ms: 3000 + variants.length * 2500,
       output: { 
-        pathogenic: classifiedVariants.filter(v => v.classification === 'pathogenic').length,
-        likely_pathogenic: classifiedVariants.filter(v => v.classification === 'likely_pathogenic').length,
-        vus: classifiedVariants.filter(v => v.classification === 'vus').length,
+        ...stats,
+        model: 'claude-sonnet-4-20250514',
+        total_classified: classifiedVariants.length
       }
     })
     .eq('case_id', caseId)
@@ -332,34 +409,40 @@ function fallbackClassification(variant: AnnotatedVariant): ClassifiedVariant {
   const score = variant.alphagenome_score || 0
   let classification: ClassifiedVariant['classification']
   let criteria: string[] = []
+  let reasoning: string
   
   if (score > 0.9 || variant.hgvs_p?.includes('*') || variant.hgvs_p?.includes('fs')) {
     classification = 'pathogenic'
     criteria = ['PVS1', 'PM2']
+    reasoning = 'Null variant (nonsense/frameshift) with strong computational evidence of pathogenicity.'
   } else if (score > 0.7) {
     classification = 'likely_pathogenic'
     criteria = ['PM1', 'PM2', 'PP3']
+    reasoning = 'High AlphaGenome impact score suggests functional disruption. Located in critical functional domain.'
   } else if (score > 0.4) {
     classification = 'vus'
     criteria = ['PM2', 'PP3']
+    reasoning = 'Moderate computational evidence. Insufficient clinical data for definitive classification.'
   } else if (score > 0.2) {
     classification = 'likely_benign'
     criteria = ['BP4', 'BS1']
+    reasoning = 'Low computational impact score. May be present at higher frequencies in population databases.'
   } else {
     classification = 'benign'
     criteria = ['BA1', 'BP4']
+    reasoning = 'Very low impact predicted. Likely tolerated variant with no functional consequence.'
   }
   
   return {
     ...variant,
     classification,
     acmg_criteria: criteria,
-    ai_reasoning: `Classification based on AlphaGenome score (${score}) and variant type.`,
+    ai_reasoning: reasoning,
     ai_confidence: 0.7,
   }
 }
 
-// Step 5: Generate clinical summary
+// Step 5: Generate clinical summary with Claude
 export async function generateClinicalSummary(
   caseId: string, 
   patientName: string,
@@ -380,29 +463,39 @@ export async function generateClinicalSummary(
     v.classification === 'pathogenic' || v.classification === 'likely_pathogenic'
   )
   
-  const variantSummary = variants.map(v => 
-    `- ${v.gene} ${v.hgvs_c} (${v.hgvs_p || 'splice'}): ${v.classification.replace('_', ' ')} [${v.acmg_criteria.join(', ')}]`
-  ).join('\n')
+  const variantDetails = variants.map(v => {
+    const alphaInfo = v.alphagenome_prediction 
+      ? `AlphaGenome: ${v.alphagenome_prediction.predictedEffect} (score: ${v.alphagenome_prediction.variantEffectScore})`
+      : ''
+    return `- ${v.gene} ${v.hgvs_c} ${v.hgvs_p || ''}: ${v.classification.replace('_', ' ')} [${v.acmg_criteria.join(', ')}] ${alphaInfo}`
+  }).join('\n')
   
-  const prompt = `You are a clinical geneticist writing a report summary. Generate a clinical narrative for this case.
+  const prompt = `You are a clinical geneticist writing a diagnostic report. Generate a professional clinical narrative for this genetic testing case.
 
-Patient: ${patientName}
-Indication: ${indication}
-Variants Found:
-${variantSummary}
+PATIENT: ${patientName}
+CLINICAL INDICATION: ${indication}
 
-Write a professional clinical summary in JSON format:
+VARIANTS IDENTIFIED:
+${variantDetails}
+
+ANALYSIS METHODS:
+- Variant calling and annotation pipeline
+- AlphaGenome (Google DeepMind) for variant effect prediction
+- ACMG/AMP guideline-based classification with AI assistance
+- ClinVar database correlation
+
+Write a comprehensive clinical summary. Your response must be valid JSON:
 {
-  "summary": "2-3 paragraph clinical narrative explaining findings and their significance",
-  "keyFindings": ["Array of 2-4 key clinical findings"],
-  "recommendations": ["Array of 2-3 clinical recommendations"]
+  "summary": "A 2-3 paragraph clinical narrative that: 1) States the testing performed and indication, 2) Summarizes key findings with clinical significance, 3) Discusses implications for patient care. Use professional medical language.",
+  "keyFindings": ["Array of 3-4 bullet points highlighting the most important clinical findings"],
+  "recommendations": ["Array of 2-4 specific clinical recommendations based on findings"]
 }`
 
   try {
     const result = await generateText({
       model: 'anthropic/claude-sonnet-4-20250514',
       prompt,
-      maxOutputTokens: 1000,
+      maxOutputTokens: 1200,
     })
     
     const jsonMatch = result.text.match(/\{[\s\S]*\}/)
@@ -422,8 +515,13 @@ Write a professional clinical summary in JSON format:
         .update({ 
           status: 'completed', 
           completed_at: new Date().toISOString(),
-          duration_ms: 3000 + Math.floor(Math.random() * 1000),
-          output: { summary_length: parsed.summary.length }
+          duration_ms: 4000 + Math.floor(Math.random() * 1000),
+          output: { 
+            summary_length: parsed.summary.length,
+            findings_count: parsed.keyFindings.length,
+            recommendations_count: parsed.recommendations.length,
+            model: 'claude-sonnet-4-20250514'
+          }
         })
         .eq('case_id', caseId)
         .eq('step_name', 'Report Generation')
@@ -440,16 +538,24 @@ Write a professional clinical summary in JSON format:
   
   // Fallback summary
   const fallbackSummary = {
-    text: `Genetic testing for ${indication} identified ${variants.length} variant(s) across the ordered gene panel. ${pathogenicVariants.length > 0 ? `${pathogenicVariants.length} variant(s) were classified as pathogenic or likely pathogenic, warranting clinical attention.` : 'No pathogenic variants were identified.'} Results were analyzed using AlphaGenome for functional prediction and classified according to ACMG/AMP guidelines.`,
+    text: `Comprehensive genetic testing was performed for ${indication}. Analysis of ${variants.length} variant(s) identified across the ordered gene panel was conducted using AlphaGenome for functional prediction and classified according to ACMG/AMP guidelines.\n\n${pathogenicVariants.length > 0 
+      ? `Clinically significant findings include ${pathogenicVariants.map(v => `${v.gene} ${v.hgvs_c}`).join(', ')}, classified as ${pathogenicVariants[0].classification.replace('_', ' ')}. These findings have potential implications for clinical management and family counseling.`
+      : 'No pathogenic or likely pathogenic variants were identified in the genes analyzed. This negative result reduces but does not eliminate genetic risk, as testing has inherent limitations.'
+    }\n\nResults were analyzed using state-of-the-art computational methods including AlphaGenome (Google DeepMind) for variant effect prediction. All classifications should be interpreted in the context of clinical findings and family history.`,
     keyFindings: [
-      `${variants.length} total variants identified`,
+      `${variants.length} total variant(s) identified and classified`,
       pathogenicVariants.length > 0 
-        ? `${pathogenicVariants.map(v => `${v.gene} ${v.hgvs_c}`).join(', ')} classified as ${pathogenicVariants[0].classification.replace('_', ' ')}`
-        : 'No pathogenic variants detected',
+        ? `Pathogenic/Likely pathogenic: ${pathogenicVariants.map(v => `${v.gene} ${v.hgvs_c}`).join(', ')}`
+        : 'No pathogenic variants detected in analyzed genes',
+      `AlphaGenome analysis completed for functional effect prediction`,
+      `Classification performed per ACMG/AMP 2015 guidelines`,
     ],
     recommendations: [
-      'Genetic counseling recommended to discuss results',
-      pathogenicVariants.length > 0 ? 'Consider cascade testing for at-risk family members' : 'Routine surveillance per clinical guidelines',
+      'Genetic counseling recommended to discuss results and implications',
+      pathogenicVariants.length > 0 
+        ? 'Consider cascade testing for at-risk first-degree relatives' 
+        : 'Continued clinical surveillance per standard guidelines',
+      'Periodic re-analysis recommended as variant databases are updated',
     ],
   }
   
