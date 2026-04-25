@@ -255,7 +255,11 @@ export default async function CaseDetailPage({ params }: PageProps) {
         </div>
       </div>
 
-      <CaseActions caseData={caseData} />
+      <CaseActions 
+        caseId={caseData.id} 
+        status={caseData.rawStatus} 
+        patientName={caseData.patientName} 
+      />
     </div>
   );
 }

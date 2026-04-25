@@ -1,9 +1,11 @@
 import { notFound } from 'next/navigation';
 import Link from 'next/link';
-import { getCaseById } from '@/lib/mock-cases';
+import { createClient } from '@/lib/supabase/server';
 import { VariantClassificationBadge } from '@/components/variant-classification-badge';
 import { Button } from '@/components/ui/button';
 import { ArrowLeft, Printer, Download } from 'lucide-react';
+
+export const dynamic = 'force-dynamic';
 
 interface PageProps {
   params: Promise<{ id: string }>;
@@ -11,14 +13,25 @@ interface PageProps {
 
 export default async function ReportPage({ params }: PageProps) {
   const { id } = await params;
-  const caseData = getCaseById(id);
+  const supabase = await createClient();
+  
+  // Fetch case with all related data
+  const { data: caseData, error } = await supabase
+    .from('cases')
+    .select(`
+      *,
+      variants (*),
+      ai_summaries (*)
+    `)
+    .eq('id', id)
+    .single();
 
-  if (!caseData || caseData.status !== 'Delivered') {
+  if (error || !caseData || caseData.status !== 'completed') {
     notFound();
   }
 
-  // TODO: Fetch finalized report from WDK workflow endpoint
-  // const report = await fetch(`/api/workflows/${id}/report`).then(r => r.json())
+  const summary = caseData.ai_summaries?.[0];
+  const variants = caseData.variants || [];
 
   return (
     <div className="min-h-screen bg-white">
@@ -40,7 +53,6 @@ export default async function ReportPage({ params }: PageProps) {
               variant="outline" 
               size="sm" 
               className="gap-2"
-              onClick={() => window.print()}
             >
               <Printer className="h-4 w-4" />
               Print
@@ -69,32 +81,32 @@ export default async function ReportPage({ params }: PageProps) {
 
           <div className="mt-8 grid grid-cols-2 gap-x-12 gap-y-4 text-sm">
             <div className="flex justify-between border-b border-border/50 py-2">
-              <span className="text-muted-foreground">Patient ID</span>
-              <span className="font-mono font-medium text-foreground">{caseData.patientId}</span>
+              <span className="text-muted-foreground">Patient Name</span>
+              <span className="font-medium text-foreground">{caseData.patient_name}</span>
             </div>
             <div className="flex justify-between border-b border-border/50 py-2">
               <span className="text-muted-foreground">Report Date</span>
               <span className="font-medium text-foreground">
-                {new Date(caseData.deliveredAt!).toLocaleDateString()}
+                {new Date(caseData.updated_at).toLocaleDateString()}
               </span>
             </div>
             <div className="flex justify-between border-b border-border/50 py-2">
-              <span className="text-muted-foreground">Patient</span>
-              <span className="font-medium text-foreground">{caseData.age}yo {caseData.sex}</span>
+              <span className="text-muted-foreground">MRN</span>
+              <span className="font-mono font-medium text-foreground">{caseData.mrn}</span>
             </div>
             <div className="flex justify-between border-b border-border/50 py-2">
-              <span className="text-muted-foreground">Sample Date</span>
+              <span className="text-muted-foreground">Date of Birth</span>
               <span className="font-medium text-foreground">
-                {new Date(caseData.sampleDate).toLocaleDateString()}
+                {new Date(caseData.patient_dob).toLocaleDateString()}
               </span>
             </div>
             <div className="flex justify-between border-b border-border/50 py-2">
               <span className="text-muted-foreground">Gene Panel</span>
-              <span className="font-medium text-foreground">{caseData.genePanel}</span>
+              <span className="font-medium text-foreground">{caseData.gene_panel?.join(', ')}</span>
             </div>
             <div className="flex justify-between border-b border-border/50 py-2">
-              <span className="text-muted-foreground">Referring Clinician</span>
-              <span className="font-medium text-foreground">{caseData.referringClinician}</span>
+              <span className="text-muted-foreground">Ordering Physician</span>
+              <span className="font-medium text-foreground">{caseData.ordering_physician}</span>
             </div>
           </div>
 
@@ -107,67 +119,92 @@ export default async function ReportPage({ params }: PageProps) {
         {/* Summary of Findings */}
         <section className="mb-8">
           <h2 className="mb-4 text-lg font-semibold text-foreground">Summary of Findings</h2>
-          {caseData.aiSummary && (
+          {summary ? (
             <div className="space-y-4">
-              {caseData.aiSummary.clinicalNarrative.split('\n\n').map((paragraph, index) => (
+              {summary.summary.split('\n\n').map((paragraph: string, index: number) => (
                 <p key={index} className="text-sm leading-relaxed text-foreground">
                   {paragraph}
                 </p>
               ))}
+              
+              {summary.key_findings && summary.key_findings.length > 0 && (
+                <div className="mt-4 rounded-lg border border-accent/20 bg-accent/5 p-4">
+                  <h3 className="mb-2 text-sm font-semibold text-accent">Key Findings</h3>
+                  <ul className="list-inside list-disc space-y-1 text-sm text-foreground">
+                    {summary.key_findings.map((finding: string, i: number) => (
+                      <li key={i}>{finding}</li>
+                    ))}
+                  </ul>
+                </div>
+              )}
             </div>
+          ) : (
+            <p className="text-sm text-muted-foreground">No summary available.</p>
           )}
         </section>
 
         {/* Detailed Variant Table */}
         <section className="mb-8">
           <h2 className="mb-4 text-lg font-semibold text-foreground">Detailed Variant Analysis</h2>
-          <div className="overflow-hidden rounded-lg border border-border">
-            <table className="w-full text-sm">
-              <thead>
-                <tr className="border-b border-border bg-muted/30">
-                  <th className="px-4 py-3 text-left font-medium text-muted-foreground">Gene</th>
-                  <th className="px-4 py-3 text-left font-medium text-muted-foreground">Variant</th>
-                  <th className="px-4 py-3 text-left font-medium text-muted-foreground">Consequence</th>
-                  <th className="px-4 py-3 text-left font-medium text-muted-foreground">Classification</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-border">
-                {caseData.variants.map((variant) => (
-                  <tr key={variant.id}>
-                    <td className="px-4 py-3 font-medium text-foreground">{variant.gene}</td>
-                    <td className="px-4 py-3">
-                      <code className="font-mono text-xs text-foreground">{variant.coordinates}</code>
-                      <p className="text-xs text-muted-foreground">{variant.transcript}</p>
-                    </td>
-                    <td className="px-4 py-3 text-foreground">{variant.consequence}</td>
-                    <td className="px-4 py-3">
-                      <VariantClassificationBadge classification={variant.claudeClassification} size="sm" />
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+          {variants.length > 0 ? (
+            <>
+              <div className="overflow-hidden rounded-lg border border-border">
+                <table className="w-full text-sm">
+                  <thead>
+                    <tr className="border-b border-border bg-muted/30">
+                      <th className="px-4 py-3 text-left font-medium text-muted-foreground">Gene</th>
+                      <th className="px-4 py-3 text-left font-medium text-muted-foreground">Variant</th>
+                      <th className="px-4 py-3 text-left font-medium text-muted-foreground">Zygosity</th>
+                      <th className="px-4 py-3 text-left font-medium text-muted-foreground">Classification</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-border">
+                    {variants.map((variant: any) => (
+                      <tr key={variant.id}>
+                        <td className="px-4 py-3 font-medium text-foreground">{variant.gene}</td>
+                        <td className="px-4 py-3">
+                          <code className="font-mono text-xs text-foreground">{variant.hgvs_c}</code>
+                          {variant.hgvs_p && (
+                            <p className="text-xs text-muted-foreground">{variant.hgvs_p}</p>
+                          )}
+                        </td>
+                        <td className="px-4 py-3 text-foreground capitalize">{variant.zygosity}</td>
+                        <td className="px-4 py-3">
+                          <VariantClassificationBadge classification={variant.classification} size="sm" />
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
 
-          {caseData.variants.map((variant) => (
-            <div key={variant.id} className="mt-6 rounded-lg border border-border p-4">
-              <div className="mb-2 flex items-center gap-2">
-                <span className="font-medium text-foreground">{variant.gene}</span>
-                <code className="font-mono text-xs text-muted-foreground">{variant.coordinates}</code>
-              </div>
-              <p className="text-sm leading-relaxed text-foreground">{variant.evidenceReasoning}</p>
-              <div className="mt-3 flex flex-wrap gap-2">
-                {variant.acmgCriteria.map((criterion) => (
-                  <span
-                    key={criterion}
-                    className="rounded-md bg-secondary px-2 py-0.5 font-mono text-xs text-foreground"
-                  >
-                    {criterion}
-                  </span>
-                ))}
-              </div>
-            </div>
-          ))}
+              {variants.map((variant: any) => (
+                <div key={variant.id} className="mt-6 rounded-lg border border-border p-4">
+                  <div className="mb-2 flex items-center gap-2">
+                    <span className="font-medium text-foreground">{variant.gene}</span>
+                    <code className="font-mono text-xs text-muted-foreground">
+                      chr{variant.chromosome}:{variant.position}
+                    </code>
+                  </div>
+                  <p className="text-sm leading-relaxed text-foreground">{variant.ai_reasoning}</p>
+                  {variant.acmg_criteria && variant.acmg_criteria.length > 0 && (
+                    <div className="mt-3 flex flex-wrap gap-2">
+                      {variant.acmg_criteria.map((criterion: string) => (
+                        <span
+                          key={criterion}
+                          className="rounded-md bg-secondary px-2 py-0.5 font-mono text-xs text-foreground"
+                        >
+                          {criterion}
+                        </span>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              ))}
+            </>
+          ) : (
+            <p className="text-sm text-muted-foreground">No variants found in this analysis.</p>
+          )}
         </section>
 
         {/* Methodology */}
@@ -175,7 +212,7 @@ export default async function ReportPage({ params }: PageProps) {
           <h2 className="mb-4 text-lg font-semibold text-foreground">Methodology</h2>
           <div className="rounded-lg border border-border bg-muted/20 p-4 text-sm text-foreground">
             <p className="mb-3">
-              This analysis was performed using an AI-enhanced genomic interpretation pipeline incorporating:
+              This analysis was performed using a WDK durable workflow incorporating:
             </p>
             <ul className="list-inside list-disc space-y-1 text-muted-foreground">
               <li>
@@ -188,7 +225,7 @@ export default async function ReportPage({ params }: PageProps) {
                 <span className="text-foreground">gnomAD</span> - Population frequency database (v4.0)
               </li>
               <li>
-                <span className="text-foreground">Claude AI</span> - Large language model for clinical narrative generation and ACMG classification
+                <span className="text-foreground">Claude AI (via Vercel AI Gateway)</span> - Large language model for clinical narrative generation and ACMG classification
               </li>
             </ul>
             <p className="mt-3">
@@ -206,18 +243,18 @@ export default async function ReportPage({ params }: PageProps) {
                 Electronically signed by
               </p>
               <p className="mt-1 text-lg font-semibold text-foreground">
-                {caseData.signingClinician}
+                {caseData.ordering_physician}
               </p>
               <p className="text-sm text-muted-foreground">
                 MD, PhD, FACMG
               </p>
               <p className="mt-2 text-xs text-muted-foreground">
-                {new Date(caseData.deliveredAt!).toLocaleString()}
+                {new Date(caseData.updated_at).toLocaleString()}
               </p>
             </div>
             <div className="text-right">
               <p className="text-sm text-muted-foreground">Workflow ID</p>
-              <code className="font-mono text-xs text-foreground">{caseData.workflowId}</code>
+              <code className="font-mono text-xs text-foreground">{caseData.workflow_id}</code>
             </div>
           </div>
 

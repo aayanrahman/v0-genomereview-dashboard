@@ -1,11 +1,30 @@
 import Link from 'next/link';
-import { getDeliveredCases } from '@/lib/mock-cases';
+import { createClient } from '@/lib/supabase/server';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { FileText, Download, Eye } from 'lucide-react';
 
-export default function ReportsPage() {
-  const deliveredCases = getDeliveredCases();
+export const dynamic = 'force-dynamic';
+
+export default async function ReportsPage() {
+  const supabase = await createClient();
+  
+  // Fetch completed cases with their summaries and variants
+  const { data: completedCases, error } = await supabase
+    .from('cases')
+    .select(`
+      *,
+      ai_summaries (*),
+      variants (*)
+    `)
+    .eq('status', 'completed')
+    .order('updated_at', { ascending: false });
+
+  if (error) {
+    console.error('Error fetching reports:', error);
+  }
+
+  const reports = completedCases || [];
 
   return (
     <div className="p-8">
@@ -16,7 +35,7 @@ export default function ReportsPage() {
         </p>
       </header>
 
-      {deliveredCases.length === 0 ? (
+      {reports.length === 0 ? (
         <Card className="border-border/50 p-12 text-center">
           <FileText className="mx-auto h-12 w-12 text-muted-foreground/50" />
           <h3 className="mt-4 text-lg font-medium text-foreground">No reports yet</h3>
@@ -26,15 +45,15 @@ export default function ReportsPage() {
         </Card>
       ) : (
         <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-          {deliveredCases.map((caseData) => (
+          {reports.map((caseData) => (
             <Card key={caseData.id} className="border-border/50 p-6">
               <div className="flex items-start justify-between">
                 <div>
                   <h3 className="font-mono text-sm font-medium text-foreground">
-                    {caseData.patientId}
+                    {caseData.mrn}
                   </h3>
                   <p className="mt-0.5 text-xs text-muted-foreground">
-                    {caseData.genePanel} Panel
+                    {caseData.gene_panel?.join(', ')} Panel
                   </p>
                 </div>
                 <div className="rounded-lg bg-benign/10 p-2">
@@ -44,18 +63,18 @@ export default function ReportsPage() {
 
               <div className="mt-4 space-y-2 text-sm">
                 <div className="flex justify-between">
-                  <span className="text-muted-foreground">Delivered</span>
+                  <span className="text-muted-foreground">Completed</span>
                   <span className="text-foreground">
-                    {new Date(caseData.deliveredAt!).toLocaleDateString()}
+                    {new Date(caseData.updated_at).toLocaleDateString()}
                   </span>
                 </div>
                 <div className="flex justify-between">
-                  <span className="text-muted-foreground">Signed by</span>
-                  <span className="text-foreground">{caseData.signingClinician}</span>
+                  <span className="text-muted-foreground">Patient</span>
+                  <span className="text-foreground">{caseData.patient_name}</span>
                 </div>
                 <div className="flex justify-between">
                   <span className="text-muted-foreground">Variants</span>
-                  <span className="text-foreground">{caseData.variants.length}</span>
+                  <span className="text-foreground">{caseData.variants?.length || 0}</span>
                 </div>
               </div>
 

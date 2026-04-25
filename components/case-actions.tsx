@@ -5,16 +5,17 @@ import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog';
 import { Textarea } from '@/components/ui/textarea';
 import { Label } from '@/components/ui/label';
-import type { Case } from '@/lib/types';
 import { toast } from 'sonner';
 import { CheckCircle, RotateCcw, MessageSquarePlus, Loader2 } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 
 interface CaseActionsProps {
-  caseData: Case;
+  caseId: string;
+  status: string;
+  patientName: string;
 }
 
-export function CaseActions({ caseData }: CaseActionsProps) {
+export function CaseActions({ caseId, status, patientName }: CaseActionsProps) {
   const router = useRouter();
   const [isApproving, setIsApproving] = useState(false);
   const [showNoteDialog, setShowNoteDialog] = useState(false);
@@ -22,46 +23,67 @@ export function CaseActions({ caseData }: CaseActionsProps) {
   const [note, setNote] = useState('');
   const [changes, setChanges] = useState('');
 
-  const canApprove = caseData.status === 'Awaiting review' || caseData.status === 'Under review';
+  const canApprove = status === 'awaiting_review' || status === 'under_review';
 
   const handleApprove = async () => {
     setIsApproving(true);
     
-    // TODO: Call WDK workflow endpoint to approve and generate report
-    // await fetch(`/api/workflows/${caseData.workflowId}/approve`, { method: 'POST' })
-    
-    // Simulate API call
-    await new Promise(resolve => setTimeout(resolve, 1500));
-    
-    toast.success('Report approved and delivered', {
-      description: `Report for ${caseData.patientId} has been finalized.`,
-    });
-    
-    setIsApproving(false);
-    router.push(`/reports/${caseData.id}`);
+    try {
+      const response = await fetch(`/api/cases/${caseId}/approve`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          signingClinician: 'Dr. Review User',
+          notes: note || undefined,
+        }),
+      });
+      
+      if (!response.ok) {
+        throw new Error('Failed to approve');
+      }
+      
+      toast.success('Report approved and delivered', {
+        description: `Report for ${patientName} has been finalized.`,
+      });
+      
+      router.push(`/reports/${caseId}`);
+    } catch (error) {
+      toast.error('Failed to approve case', {
+        description: 'Please try again.',
+      });
+    } finally {
+      setIsApproving(false);
+    }
   };
 
-  const handleRequestChanges = () => {
-    // TODO: Call WDK workflow endpoint to request changes
-    // await fetch(`/api/workflows/${caseData.workflowId}/request-changes`, { 
-    //   method: 'POST',
-    //   body: JSON.stringify({ changes })
-    // })
-    
-    toast.info('Changes requested', {
-      description: 'The case has been flagged for re-analysis.',
-    });
-    setShowChangesDialog(false);
-    setChanges('');
+  const handleRequestChanges = async () => {
+    try {
+      const response = await fetch(`/api/cases/${caseId}/reject`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          reason: changes,
+          reviewerName: 'Dr. Review User',
+        }),
+      });
+      
+      if (!response.ok) {
+        throw new Error('Failed to request changes');
+      }
+      
+      toast.info('Changes requested', {
+        description: 'The case has been flagged for re-analysis.',
+      });
+      
+      setShowChangesDialog(false);
+      setChanges('');
+      router.refresh();
+    } catch (error) {
+      toast.error('Failed to request changes');
+    }
   };
 
   const handleAddNote = () => {
-    // TODO: Call WDK workflow endpoint to add note
-    // await fetch(`/api/workflows/${caseData.workflowId}/notes`, { 
-    //   method: 'POST',
-    //   body: JSON.stringify({ note })
-    // })
-    
     toast.success('Note added', {
       description: 'Your note has been attached to this case.',
     });
@@ -69,22 +91,22 @@ export function CaseActions({ caseData }: CaseActionsProps) {
     setNote('');
   };
 
-  if (caseData.status === 'Delivered') {
+  if (status === 'completed') {
     return (
       <div className="fixed bottom-0 left-64 right-0 border-t border-border bg-card px-8 py-4">
         <div className="flex items-center justify-between">
           <p className="text-sm text-muted-foreground">
-            This case has been delivered on {new Date(caseData.deliveredAt!).toLocaleDateString()}
+            This case has been completed and delivered
           </p>
           <Button asChild variant="outline">
-            <a href={`/reports/${caseData.id}`}>View Report</a>
+            <a href={`/reports/${caseId}`}>View Report</a>
           </Button>
         </div>
       </div>
     );
   }
 
-  if (caseData.status === 'In progress') {
+  if (status === 'in_progress' || status === 'pending') {
     return (
       <div className="fixed bottom-0 left-64 right-0 border-t border-border bg-card px-8 py-4">
         <div className="flex items-center justify-center gap-2 text-sm text-muted-foreground">
