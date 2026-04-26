@@ -2,7 +2,6 @@ import os
 import re
 import time
 import logging
-import httpx
 from contextlib import asynccontextmanager
 from fastapi import FastAPI, HTTPException, Header
 from pydantic import BaseModel
@@ -14,18 +13,22 @@ logger = logging.getLogger(__name__)
 SERVICE_API_KEY = os.environ.get("SERVICE_API_KEY", "")
 ALPHAGENOME_API_KEY = os.environ.get("ALPHAGENOME_API_KEY", "")
 
-ag_ready = False
+ag_client = None
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    global ag_ready
+    global ag_client
     if ALPHAGENOME_API_KEY:
-        ag_ready = True
-        logger.info("AlphaGenome API key loaded — ready for real predictions")
+        try:
+            from alphagenome.models import dna_client
+            ag_client = dna_client.create(ALPHAGENOME_API_KEY)
+            logger.info("AlphaGenome client initialized")
+        except Exception as e:
+            logger.warning(f"AlphaGenome client failed to init: {e}")
     else:
         logger.warning("ALPHAGENOME_API_KEY not set — running in simulation mode")
     yield
-    ag_ready = False
+    ag_client = None
 
 app = FastAPI(title="AlphaGenome Proxy", lifespan=lifespan)
 
@@ -62,7 +65,7 @@ def _auth(x_api_key: str):
 
 @app.get("/health")
 def health():
-    return {"status": "ok", "ag_client_ready": ag_ready}
+    return {"status": "ok", "ag_client_ready": ag_client is not None}
 
 
 @app.post("/predict", response_model=PredictionResponse)
@@ -73,7 +76,7 @@ async def predict(
     _auth(x_api_key)
     start = time.monotonic()
 
-    if ag_ready:
+    if ag_client is not None:
         result = await _call_alphagenome(req, start)
     else:
         result = _simulate(req, start)
@@ -82,58 +85,73 @@ async def predict(
 
 
 async def _call_alphagenome(req: VariantRequest, start: float) -> PredictionResponse:
-    """Call AlphaGenome via HTTP API."""
-    chrom = req.chromosome if req.chromosome.startswith("chr") else f"chr{req.chromosome}"
+    """Call the real AlphaGenome API via the Python SDK."""
     try:
-        async with httpx.AsyncClient(timeout=25.0) as client:
-            resp = await client.post(
-                "https://alphagenomics.googleapis.com/v1/variants:predictEffect",
-                headers={"X-Goog-Api-Key": ALPHAGENOME_API_KEY, "Content-Type": "application/json"},
-                json={
-                    "chromosome": chrom,
-                    "position": req.position,
-                    "referenceAllele": req.reference_allele,
-                    "alternateAllele": req.alternate_allele,
-                },
-            )
-            if resp.status_code == 200:
-                d = resp.json()
-                ves = float(d.get("variantEffectScore", 0.0))
-                rna = float(d.get("rnaSeqEffect", 0.0))
-                splice_score = float(d.get("spliceEffectScore", 0.0))
-                splice_type = d.get("spliceEffectType", "none")
-                chromatin = float(d.get("chromatinEffect", 0.0))
+        from alphagenome.data import genome
+        from alphagenome.models import dna_client
 
-                if ves > 0.8:
-                    effect = "loss_of_function"
-                elif splice_score > 0.5:
-                    effect = "splice_disruption"
-                elif ves > 0.5:
-                    effect = "damaging_missense"
-                elif ves > 0.2:
-                    effect = "tolerated_missense"
-                else:
-                    effect = "benign"
+        chrom = req.chromosome if req.chromosome.startswith("chr") else f"chr{req.chromosome}"
 
-                elapsed_ms = int((time.monotonic() - start) * 1000)
-                return PredictionResponse(
-                    variant_effect_score=round(ves, 3),
-                    predicted_effect=effect,
-                    rna_seq_effect=round(rna, 3),
-                    splice_effect_score=round(splice_score, 3),
-                    splice_effect_type=splice_type,
-                    chromatin_effect=round(chromatin, 3),
-                    confidence=0.92,
-                    model_version="alphagenome-v1",
-                    prediction_time_ms=elapsed_ms,
-                    source="alphagenome",
-                )
-            else:
-                logger.warning(f"AlphaGenome API returned {resp.status_code}: {resp.text[:200]}")
+        variant = genome.Variant(
+            chromosome=chrom,
+            position=req.position,
+            reference_bases=req.reference_allele,
+            alternate_bases=req.alternate_allele,
+        )
+        interval = variant.reference_interval.resize(dna_client.SEQUENCE_LENGTH_1MB)
+
+        variant_output = ag_client.predict_variant(
+            interval=interval,
+            variant=variant,
+            requested_outputs=[dna_client.OutputType.RNA_SEQ],
+        )
+
+        ref_vals = np.array(variant_output.reference.values)
+        alt_vals = np.array(variant_output.alternate.values)
+        delta = alt_vals - ref_vals
+
+        rna_delta = float(np.mean(delta))
+        ves = float(min(1.0, max(0.0, np.mean(np.abs(delta)))))
+
+        splice_score = 0.0
+        splice_type = "none"
+        if hasattr(variant_output, "splice_junction"):
+            sj = np.array(variant_output.splice_junction.values) if variant_output.splice_junction else np.array([0.0])
+            splice_score = float(np.max(np.abs(sj)))
+            if splice_score > 0.5:
+                splice_type = "splice_site_loss"
+
+        chromatin = 0.0
+        if hasattr(variant_output, "chromatin"):
+            chromatin = float(np.mean(np.array(variant_output.chromatin.values) if variant_output.chromatin else [0.0]))
+
+        if ves > 0.8:
+            effect = "loss_of_function"
+        elif splice_score > 0.5:
+            effect = "splice_disruption"
+        elif ves > 0.5:
+            effect = "damaging_missense"
+        elif ves > 0.2:
+            effect = "tolerated_missense"
+        else:
+            effect = "benign"
+
+        elapsed_ms = int((time.monotonic() - start) * 1000)
+        return PredictionResponse(
+            variant_effect_score=round(ves, 3),
+            predicted_effect=effect,
+            rna_seq_effect=round(rna_delta, 3),
+            splice_effect_score=round(splice_score, 3),
+            splice_effect_type=splice_type,
+            chromatin_effect=round(chromatin, 3),
+            confidence=0.92,
+            model_version="alphagenome-v1",
+            prediction_time_ms=elapsed_ms,
+            source="alphagenome",
+        )
     except Exception as e:
-        logger.warning(f"AlphaGenome HTTP call failed: {e}, falling back to simulation")
-
-    return _simulate(req, start)
+        logger.error(f"AlphaGenome API error: {e}, falling back to simulation")
+        return _simulate(req, start)
 
 
 def _simulate(req: VariantRequest, start: float) -> PredictionResponse:
