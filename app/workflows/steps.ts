@@ -25,6 +25,7 @@ export interface AnnotatedVariant extends Variant {
   alphagenome_effect: string | null
   alphagenome_prediction: AlphaGenomePrediction | null
   splice_effect: string | null
+  ag_source: 'alphagenome' | 'estimated' | null
 }
 
 export interface ClassifiedVariant extends AnnotatedVariant {
