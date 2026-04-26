@@ -104,6 +104,7 @@ async def _call_alphagenome(req: VariantRequest, start: float) -> PredictionResp
             interval=interval,
             variant=variant,
             requested_outputs=[dna_client.OutputType.RNA_SEQ],
+            ontology_terms=['UBERON:0000310', 'UBERON:0000992', 'UBERON:0001155'],
         )
 
         ref_vals = np.array(variant_output.reference.values)
