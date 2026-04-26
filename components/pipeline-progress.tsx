@@ -118,7 +118,7 @@ export function PipelineProgress({
                 {showDurations && (status === 'completed' || status === 'running') && !isCrashed && (
                   <div className="mt-0.5 flex items-center gap-2 text-xs text-muted-foreground">
                     {actualStep?.startedAt && (
-                      <span>{new Date(actualStep.startedAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
+                      <span>{new Date(actualStep.startedAt).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })}</span>
                     )}
                     {actualStep?.duration && <span className="text-benign">{actualStep.duration}</span>}
                     {status === 'running' && <span className="text-accent">Running...</span>}

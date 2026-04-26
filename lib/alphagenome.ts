@@ -84,6 +84,7 @@ export async function predictVariantEffect(
 
       if (res.ok) {
         const d = await res.json()
+        console.log('[AG] proxy response source=', d.source, 'status=', res.status)
         return {
           variantEffectScore: d.variant_effect_score,
           predictedEffect: d.predicted_effect,
@@ -95,10 +96,14 @@ export async function predictVariantEffect(
           predictionTime: d.prediction_time_ms,
           source: d.source,
         }
+      } else {
+        console.warn('[AG] proxy returned non-OK status:', res.status, await res.text())
       }
     } catch (err) {
-      console.warn('AlphaGenome proxy unreachable, falling back to simulation:', err)
+      console.warn('[AG] proxy unreachable, falling back to simulation:', err)
     }
+  } else {
+    console.log('[AG] ALPHAGENOME_SERVICE_URL not set in this env — using simulation')
   }
 
   // Simulation fallback

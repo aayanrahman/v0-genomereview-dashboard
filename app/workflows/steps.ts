@@ -464,14 +464,15 @@ export async function queryClinvar(caseId: string, variants: Variant[]): Promise
 // Step 3: AlphaGenome variant effect prediction
 export async function runAlphaGenome(caseId: string, variants: Variant[]): Promise<AnnotatedVariant[]> {
   'use step'
-  
+
   const supabase = createClient()
   const apiKey = process.env.ALPHAGENOME_API_KEY
-  
+  const stepStartTime = Date.now()
+
   if (!apiKey) {
     console.error('ALPHAGENOME_API_KEY not configured')
   }
-  
+
   await supabase
     .from('pipeline_steps')
     .update({ status: 'running', started_at: new Date().toISOString() })
@@ -495,6 +496,7 @@ export async function runAlphaGenome(caseId: string, variants: Variant[]): Promi
       apiKey || ''
     )
     
+    console.log('[AG] variant', variant.gene, variant.hgvs_c, 'prediction.source=', prediction.source)
     annotated.push({
       ...variant,
       alphagenome_score: prediction.variantEffectScore,
@@ -505,19 +507,20 @@ export async function runAlphaGenome(caseId: string, variants: Variant[]): Promi
     })
   }
   
-  const highImpact = annotated.filter(v => (v.alphagenome_score || 0) > 0.7).length
+  const highImpact = annotated.filter(v => (v.alphagenome_score || 0) > 0.5).length
   const spliceVariants = annotated.filter(v => v.splice_effect).length
-  
+  const modelVersion = annotated[0]?.alphagenome_prediction?.modelVersion ?? 'unknown'
+
   await supabase
     .from('pipeline_steps')
-    .update({ 
-      status: 'completed', 
+    .update({
+      status: 'completed',
       completed_at: new Date().toISOString(),
-      duration_ms: variants.length * 2000 + Math.floor(Math.random() * 1000),
-      output: { 
+      duration_ms: Date.now() - stepStartTime,
+      output: {
         high_impact: highImpact,
         splice_variants: spliceVariants,
-        model_version: 'alphagenome-v0.6.1',
+        model_version: modelVersion,
         variants_scored: variants.length
       }
     })
@@ -567,15 +570,22 @@ export async function classifyVariants(caseId: string, variants: AnnotatedVarian
       continue
     }
     
-    const alphaGenomeInfo = variant.alphagenome_prediction 
+    const agScore = variant.alphagenome_prediction?.variantEffectScore ?? 0
+    let agEvidence = ''
+    if (agScore > 1.5) agEvidence = 'PS3 (strong functional evidence supporting pathogenicity)'
+    else if (agScore > 0.5) agEvidence = 'PP3 (computational evidence supporting pathogenicity)'
+    else if (agScore < 0.1) agEvidence = 'BP4 (computational evidence supporting benign)'
+    else agEvidence = 'no ACMG criterion met (intermediate score)'
+
+    const alphaGenomeInfo = variant.alphagenome_prediction
       ? `
-AlphaGenome Analysis:
-- Variant Effect Score: ${variant.alphagenome_prediction.variantEffectScore} (0-1 scale, higher = more impactful)
+AlphaGenome Analysis (Google DeepMind, peak log-fold-change in RNA expression):
+- Variant Effect Score: ${agScore.toFixed(3)} → ${agEvidence}
 - Predicted Effect: ${variant.alphagenome_prediction.predictedEffect}
-- RNA Expression Change: ${variant.alphagenome_prediction.rnaSeqEffect > 0 ? '+' : ''}${(variant.alphagenome_prediction.rnaSeqEffect * 100).toFixed(1)}%
-- Splice Disruption Score: ${variant.alphagenome_prediction.spliceEffect.score} (${variant.alphagenome_prediction.spliceEffect.type})
-- Chromatin Effect: ${variant.alphagenome_prediction.chromatinEffect > 0 ? '+' : ''}${(variant.alphagenome_prediction.chromatinEffect * 100).toFixed(1)}%
-- Model Confidence: ${(variant.alphagenome_prediction.confidence * 100).toFixed(0)}%`
+- Peak RNA Expression Δ: ${variant.alphagenome_prediction.rnaSeqEffect > 0 ? '+' : ''}${variant.alphagenome_prediction.rnaSeqEffect.toFixed(3)} log2FC
+- Model Confidence: ${(variant.alphagenome_prediction.confidence * 100).toFixed(0)}%
+
+ACMG thresholds for AlphaGenome score: >1.5 = PS3, >0.5 = PP3, <0.1 = BP4.`
       : ''
     
     const clinvarNote = variant.clinvar_stars 
@@ -686,6 +696,7 @@ Valid classifications: pathogenic, likely_pathogenic, vus, likely_benign, benign
   
   // Save variants to database
   for (const v of classifiedVariants) {
+    console.log('[AG] saving', v.gene, v.hgvs_c, 'ag_source=', (v as any).ag_source)
     await supabase.from('variants').insert({
       case_id: caseId,
       gene: v.gene,
@@ -704,6 +715,7 @@ Valid classifications: pathogenic, likely_pathogenic, vus, likely_benign, benign
       ai_reasoning: v.ai_reasoning + (v.zygosity_warning ? `\n\n⚠️ ${v.zygosity_warning}` : ''),
       ai_confidence: v.ai_confidence,
       ag_source: v.ag_source || 'estimated', // Track AlphaGenome vs estimated
+      alphagenome_score: v.alphagenome_score,
     })
   }
   

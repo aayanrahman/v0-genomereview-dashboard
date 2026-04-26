@@ -121,6 +121,8 @@ async function getCaseData(id: string) {
       aiConfidence: v.ai_confidence,
       reviewed: v.reviewed,
       reviewerNotes: v.reviewer_notes,
+      agSource: v.ag_source,
+      alphagenomeScore: v.alphagenome_score != null ? Number(v.alphagenome_score) : null,
     })) || [],
     pipelineSteps: pipelineSteps?.map(step => ({
       name: step.step_name,

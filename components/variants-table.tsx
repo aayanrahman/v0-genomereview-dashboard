@@ -34,6 +34,7 @@ interface Variant {
   reviewerNotes: string | null;
   delta?: VariantDelta | null;
   agSource?: 'alphagenome' | 'estimated' | null;
+  alphagenomeScore?: number | null;
 }
 
 interface VariantsTableProps {
@@ -91,6 +92,9 @@ export function VariantsTable({ variants, showDelta = false }: VariantsTableProp
               </th>
               <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-muted-foreground">
                 Classification
+              </th>
+              <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-muted-foreground" title="AlphaGenome peak log-fold-change in RNA expression">
+                AG Score
               </th>
               <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-muted-foreground">
                 Source
@@ -167,6 +171,33 @@ export function VariantsTable({ variants, showDelta = false }: VariantsTableProp
                       />
                     </td>
                     <td className="px-4 py-4">
+                      {variant.alphagenomeScore != null ? (
+                        <span
+                          className={cn(
+                            'inline-flex items-center rounded px-1.5 py-0.5 font-mono text-xs font-semibold tabular-nums',
+                            variant.alphagenomeScore < 0.1
+                              ? 'bg-benign/15 text-benign'
+                              : variant.alphagenomeScore < 0.5
+                              ? 'bg-vus/15 text-vus'
+                              : 'bg-pathogenic/15 text-pathogenic'
+                          )}
+                          title={
+                            variant.alphagenomeScore > 1.5
+                              ? 'PS3 — strong functional evidence'
+                              : variant.alphagenomeScore > 0.5
+                              ? 'PP3 — supporting computational evidence'
+                              : variant.alphagenomeScore < 0.1
+                              ? 'BP4 — benign computational evidence'
+                              : 'Intermediate score'
+                          }
+                        >
+                          {variant.alphagenomeScore.toFixed(2)}
+                        </span>
+                      ) : (
+                        <span className="text-xs text-muted-foreground">-</span>
+                      )}
+                    </td>
+                    <td className="px-4 py-4">
                       {variant.agSource === 'alphagenome' ? (
                         <span className="inline-flex items-center rounded-full bg-benign/10 px-2 py-0.5 text-[10px] font-semibold text-benign">
                           AlphaGenome
@@ -185,7 +216,7 @@ export function VariantsTable({ variants, showDelta = false }: VariantsTableProp
                   </tr>
                   {isExpanded && (
                     <tr key={`${variant.id}-expanded`} className="bg-muted/10">
-                      <td colSpan={showDelta ? 10 : 9} className="px-6 py-4">
+                      <td colSpan={showDelta ? 11 : 10} className="px-6 py-4">
                         <div className="space-y-4">
                           {hasZygosityWarning && (
                             <div className="rounded-md border border-vus/30 bg-vus/10 px-3 py-2 text-sm text-vus">

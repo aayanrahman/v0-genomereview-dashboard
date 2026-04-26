@@ -107,43 +107,27 @@ async def _call_alphagenome(req: VariantRequest, start: float) -> PredictionResp
             ontology_terms=['UBERON:0000310', 'UBERON:0000992', 'UBERON:0001155'],
         )
 
-        ref = variant_output.reference
-        logger.info(f"AG_DEBUG type={type(ref).__name__} attrs={[a for a in dir(ref) if not a.startswith('_')]}")
-
-        ref_track = getattr(ref, 'rna_seq', None) or getattr(ref, 'RNA_SEQ', None)
-        if ref_track is None:
-            for attr in dir(ref):
-                if attr.startswith('_'):
-                    continue
-                val = getattr(ref, attr, None)
-                if hasattr(val, 'values'):
-                    logger.info(f"AG_DEBUG using attr '{attr}' on reference")
-                    ref_track = val
-                    alt_track = getattr(variant_output.alternate, attr)
-                    break
-            else:
-                raise AttributeError(f"no track found on reference; attrs={dir(ref)}")
-        else:
-            alt_track = getattr(variant_output.alternate, 'rna_seq', None) or variant_output.alternate.RNA_SEQ
+        ref_track = variant_output.reference.rna_seq
+        alt_track = variant_output.alternate.rna_seq
 
         ref_vals = np.array(ref_track.values)
         alt_vals = np.array(alt_track.values)
         delta = alt_vals - ref_vals
 
-        rna_delta = float(np.mean(delta))
-        ves = float(min(1.0, max(0.0, np.mean(np.abs(delta)))))
+        # Peak log-fold-change in RNA expression — preserves the strongest
+        # tissue/position signal instead of averaging it away to zero.
+        ves = float(np.max(np.abs(delta)))
+        rna_delta = float(delta.flat[np.argmax(np.abs(delta))])
 
         splice_score = 0.0
         splice_type = "none"
         chromatin = 0.0
 
-        if ves > 0.8:
+        if ves > 1.5:
             effect = "loss_of_function"
-        elif splice_score > 0.5:
-            effect = "splice_disruption"
         elif ves > 0.5:
             effect = "damaging_missense"
-        elif ves > 0.2:
+        elif ves > 0.1:
             effect = "tolerated_missense"
         else:
             effect = "benign"
