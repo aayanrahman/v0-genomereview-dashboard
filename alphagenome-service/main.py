@@ -112,12 +112,38 @@ async def _call_alphagenome(req: VariantRequest, start: float) -> PredictionResp
 
         ref_vals = np.array(ref_track.values)
         alt_vals = np.array(alt_track.values)
-        delta = alt_vals - ref_vals
+        delta = alt_vals - ref_vals  # may be (positions,) or (positions, tracks)
 
-        # Peak log-fold-change in RNA expression — preserves the strongest
-        # tissue/position signal instead of averaging it away to zero.
-        ves = float(np.max(np.abs(delta)))
-        rna_delta = float(delta.flat[np.argmax(np.abs(delta))])
+        # Reduce track dimension if present, keep position dimension
+        abs_delta = np.abs(delta)
+        if abs_delta.ndim > 1:
+            abs_delta_pos = np.max(abs_delta, axis=tuple(range(1, abs_delta.ndim)))
+        else:
+            abs_delta_pos = abs_delta
+
+        # Restrict the peak search to a ±2kb window around the variant position.
+        # Without this, two variants in the same gene share a near-identical 1Mb
+        # window and the global peak collapses to the same shared feature (TSS,
+        # etc.) — producing identical scores for distinct variants.
+        n_bins = len(abs_delta_pos)
+        bin_size_bp = max(1.0, (interval.end - interval.start) / n_bins)
+        variant_bin = int((req.position - interval.start) / bin_size_bp)
+        window_bins = max(1, int(2048 / bin_size_bp))
+        lo = max(0, variant_bin - window_bins)
+        hi = min(n_bins, variant_bin + window_bins + 1)
+        local_abs = abs_delta_pos[lo:hi]
+        if local_abs.size == 0:
+            local_abs = abs_delta_pos  # fall back to full track if window is empty
+
+        peak_idx_local = int(np.argmax(local_abs))
+        peak_idx_global = lo + peak_idx_local
+        ves = float(local_abs[peak_idx_local])
+
+        if delta.ndim == 1:
+            rna_delta = float(delta[peak_idx_global])
+        else:
+            row = delta[peak_idx_global]
+            rna_delta = float(row.flat[np.argmax(np.abs(row))])
 
         splice_score = 0.0
         splice_type = "none"
