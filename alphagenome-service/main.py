@@ -107,8 +107,27 @@ async def _call_alphagenome(req: VariantRequest, start: float) -> PredictionResp
             ontology_terms=['UBERON:0000310', 'UBERON:0000992', 'UBERON:0001155'],
         )
 
-        ref_vals = np.array(variant_output.reference.values)
-        alt_vals = np.array(variant_output.alternate.values)
+        ref = variant_output.reference
+        logger.info(f"AG_DEBUG type={type(ref).__name__} attrs={[a for a in dir(ref) if not a.startswith('_')]}")
+
+        ref_track = getattr(ref, 'rna_seq', None) or getattr(ref, 'RNA_SEQ', None)
+        if ref_track is None:
+            for attr in dir(ref):
+                if attr.startswith('_'):
+                    continue
+                val = getattr(ref, attr, None)
+                if hasattr(val, 'values'):
+                    logger.info(f"AG_DEBUG using attr '{attr}' on reference")
+                    ref_track = val
+                    alt_track = getattr(variant_output.alternate, attr)
+                    break
+            else:
+                raise AttributeError(f"no track found on reference; attrs={dir(ref)}")
+        else:
+            alt_track = getattr(variant_output.alternate, 'rna_seq', None) or variant_output.alternate.RNA_SEQ
+
+        ref_vals = np.array(ref_track.values)
+        alt_vals = np.array(alt_track.values)
         delta = alt_vals - ref_vals
 
         rna_delta = float(np.mean(delta))
@@ -116,15 +135,7 @@ async def _call_alphagenome(req: VariantRequest, start: float) -> PredictionResp
 
         splice_score = 0.0
         splice_type = "none"
-        if hasattr(variant_output, "splice_junction"):
-            sj = np.array(variant_output.splice_junction.values) if variant_output.splice_junction else np.array([0.0])
-            splice_score = float(np.max(np.abs(sj)))
-            if splice_score > 0.5:
-                splice_type = "splice_site_loss"
-
         chromatin = 0.0
-        if hasattr(variant_output, "chromatin"):
-            chromatin = float(np.mean(np.array(variant_output.chromatin.values) if variant_output.chromatin else [0.0]))
 
         if ves > 0.8:
             effect = "loss_of_function"
@@ -151,7 +162,11 @@ async def _call_alphagenome(req: VariantRequest, start: float) -> PredictionResp
             source="alphagenome",
         )
     except Exception as e:
-        logger.error(f"AlphaGenome API error: {e}, falling back to simulation")
+        try:
+            ref_attrs = dir(variant_output.reference) if 'variant_output' in locals() else []
+            logger.error(f"AlphaGenome API error: {e}; reference attrs: {[a for a in ref_attrs if not a.startswith('_')]}")
+        except Exception:
+            logger.error(f"AlphaGenome API error: {e}, falling back to simulation")
         return _simulate(req, start)
 
 

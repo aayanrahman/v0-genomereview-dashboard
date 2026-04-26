@@ -3,6 +3,7 @@ import { Button } from '@/components/ui/button';
 import { PipelineProgress } from '@/components/pipeline-progress';
 import { StatusBadge } from '@/components/status-badge';
 import { LiveWorkflowIndicator } from '@/components/live-workflow-indicator';
+import { DeleteCaseButton } from '@/components/delete-case-button';
 import { ArrowRight, Eye } from 'lucide-react';
 
 interface PipelineStep {
@@ -94,26 +95,29 @@ export function CasesTable({ cases }: CasesTableProps) {
                 <StatusBadge status={caseItem.status} />
               </td>
               <td className="px-4 py-4 text-right">
-                <Button asChild size="sm" variant="ghost" className="gap-1.5">
-                  <Link href={`/cases/${caseItem.id}`}>
-                    {caseItem.status === 'Completed' ? (
-                      <>
-                        <Eye className="h-3.5 w-3.5" />
-                        View
-                      </>
-                    ) : caseItem.status === 'Awaiting review' || caseItem.status === 'Under review' ? (
-                      <>
-                        Review
-                        <ArrowRight className="h-3.5 w-3.5" />
-                      </>
-                    ) : (
-                      <>
-                        Details
-                        <ArrowRight className="h-3.5 w-3.5" />
-                      </>
-                    )}
-                  </Link>
-                </Button>
+                <div className="flex items-center justify-end gap-1">
+                  <Button asChild size="sm" variant="ghost" className="gap-1.5">
+                    <Link href={`/cases/${caseItem.id}`}>
+                      {caseItem.status === 'Completed' ? (
+                        <>
+                          <Eye className="h-3.5 w-3.5" />
+                          View
+                        </>
+                      ) : caseItem.status === 'Awaiting review' || caseItem.status === 'Under review' ? (
+                        <>
+                          Review
+                          <ArrowRight className="h-3.5 w-3.5" />
+                        </>
+                      ) : (
+                        <>
+                          Details
+                          <ArrowRight className="h-3.5 w-3.5" />
+                        </>
+                      )}
+                    </Link>
+                  </Button>
+                  <DeleteCaseButton caseId={caseItem.id} patientName={caseItem.patientName} />
+                </div>
               </td>
             </tr>
           ))}

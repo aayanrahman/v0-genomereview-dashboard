@@ -132,6 +132,30 @@ export async function PATCH(
   }
 }
 
+export async function DELETE(
+  request: Request,
+  { params }: { params: Promise<{ id: string }> }
+) {
+  try {
+    const { id } = await params
+    const supabase = await createClient()
+
+    await supabase.from('variants').delete().eq('case_id', id)
+    await supabase.from('pipeline_steps').delete().eq('case_id', id)
+    await supabase.from('ai_summaries').delete().eq('case_id', id)
+
+    const { error } = await supabase.from('cases').delete().eq('id', id)
+    if (error) {
+      return NextResponse.json({ error: 'Failed to delete case' }, { status: 500 })
+    }
+
+    return NextResponse.json({ success: true })
+  } catch (error) {
+    console.error('Case delete error:', error)
+    return NextResponse.json({ error: 'Internal server error' }, { status: 500 })
+  }
+}
+
 function formatStatus(status: string): string {
   const statusMap: Record<string, string> = {
     'pending': 'Pending',
