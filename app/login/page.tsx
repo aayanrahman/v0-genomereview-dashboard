@@ -30,7 +30,10 @@ export default function LoginPage() {
 
     const { error } = await supabase.auth.signInWithOtp({
       email,
-      options: { shouldCreateUser: true },
+      options: {
+        shouldCreateUser: true,
+        emailRedirectTo: `${window.location.origin}/auth/callback`,
+      },
     })
 
     if (error) {
@@ -45,7 +48,10 @@ export default function LoginPage() {
     setError(null)
     const { error } = await supabase.auth.signInWithOtp({
       email,
-      options: { shouldCreateUser: true },
+      options: {
+        shouldCreateUser: true,
+        emailRedirectTo: `${window.location.origin}/auth/callback`,
+      },
     })
     if (error) setError(error.message)
   }
