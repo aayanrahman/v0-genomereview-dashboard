@@ -67,8 +67,8 @@ export function VariantsTable({ variants, showDelta = false }: VariantsTableProp
         </div>
       )}
       
-      <div className="overflow-hidden rounded-lg border border-border/50">
-        <table className="w-full">
+      <div className="overflow-x-auto rounded-lg border border-border/50">
+        <table className="w-full min-w-[1100px]">
           <thead>
             <tr className="border-b border-border/50 bg-muted/30">
               <th className="w-8 px-2 py-3"></th>
